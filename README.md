@@ -206,8 +206,3 @@ All core components are packaged and available publicly on Docker Hub:
     └── Dockerfile                             # Custom vLLM Dockerfile
 ```
 
----
-
-## 📖 Complete PDF Operational Manual
-A styled 10-page operational manual PDF is included in this repository:
-* [View PDF Manual](file:///root/deliverables/Qwen3-32B_Deployment_Guide.pdf)
