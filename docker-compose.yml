@@ -1,0 +1,26 @@
+services:
+  vllm-qwen3-32b:
+    image: nish0753/qwen3-32b-vllm:v1
+    container_name: vllm-qwen3-32b
+    ipc: host
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    volumes:
+      - /root/Qwen3-32B:/model
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+  chat-frontend:
+    build: /root/frontend
+    container_name: chat-frontend
+    restart: unless-stopped
+    depends_on:
+      - vllm-qwen3-32b
+    ports:
+      - "8080:80"

@@ -1,0 +1,32 @@
+# Ignore all hidden dot-directories and dot-files in /root
+.*
+!/.gitignore
+
+# Heavy Model Weights & Virtual Envs
+Qwen3-32B/
+vllm-hf-cache/
+qwen-vllm/
+
+# Personal Documentation, Guides, Plans & Walkthroughs (Keep Local Only)
+deliverables/
+*.pdf
+Qwen3-32B_Deployment_Guide.html
+walkthrough.md
+deployment_guide.md
+implementation_plan.md
+architecture.md
+architecture.mmd
+sequence.mmd
+architecture_diagram.png
+sequence_diagram.png
+build_pdf.py
+
+# System, Log, Binary & Temporary Files
+*.log
+*.deb
+*.sh
+cloudflared
+1
+snap/
+.ui_key
+puppeteer-config.json

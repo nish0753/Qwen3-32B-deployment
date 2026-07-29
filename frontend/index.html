@@ -1,0 +1,598 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Qwen3-32B Studio</title>
+<style>
+  :root {
+    --bg: #0e1015;
+    --panel: #161922;
+    --panel-2: #1d212c;
+    --border: #2a2f3d;
+    --text: #e7e9ee;
+    --muted: #8a90a0;
+    --accent1: #6366f1;
+    --accent2: #a855f7;
+    --user-bubble: #2b3f8f;
+    --assistant-bubble: #1d212c;
+    --error: #7a2a2a;
+    --radius: 14px;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; height: 100%; background: var(--bg); color: var(--text);
+    font-family: -apple-system, "Segoe UI", Inter, system-ui, sans-serif;
+  }
+  .app { display: flex; height: 100vh; overflow: hidden; }
+
+  /* Sidebar */
+  .sidebar {
+    width: 300px; flex-shrink: 0; background: var(--panel); border-right: 1px solid var(--border);
+    padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 16px;
+    transition: width .2s ease, padding .2s ease;
+  }
+  .sidebar.collapsed { width: 0; padding: 0; overflow: hidden; border-right: none; }
+  .brand { display: flex; align-items: center; gap: 10px; margin-bottom: 4px; }
+  .brand .dot-logo {
+    width: 30px; height: 30px; border-radius: 9px;
+    background: linear-gradient(135deg, var(--accent1), var(--accent2));
+    flex-shrink: 0;
+  }
+  .brand h1 { font-size: 15px; margin: 0; font-weight: 600; }
+  .brand .sub { font-size: 11px; color: var(--muted); }
+
+  .field { display: flex; flex-direction: column; gap: 6px; }
+  .field label {
+    font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted);
+    display: flex; justify-content: space-between;
+  }
+  .field label span.val { color: var(--text); font-weight: 600; text-transform: none; letter-spacing: 0; }
+  textarea, input[type=text], input[type=number] {
+    background: var(--panel-2); color: var(--text); border: 1px solid var(--border);
+    border-radius: 8px; padding: 8px 10px; font-family: inherit; font-size: 13px; width: 100%;
+  }
+  textarea:focus, input:focus { outline: none; border-color: var(--accent1); }
+  #systemPrompt { resize: vertical; min-height: 90px; line-height: 1.4; }
+
+  input[type=range] {
+    -webkit-appearance: none; width: 100%; height: 4px; border-radius: 2px;
+    background: var(--border); outline: none;
+  }
+  input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none; width: 15px; height: 15px; border-radius: 50%;
+    background: linear-gradient(135deg, var(--accent1), var(--accent2)); cursor: pointer; border: none;
+  }
+
+  details { border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; }
+  details summary { cursor: pointer; font-size: 12px; color: var(--muted); }
+  details .field { margin-top: 10px; }
+
+  .sidebar-btn {
+    background: var(--panel-2); color: var(--text); border: 1px solid var(--border);
+    border-radius: 8px; padding: 9px; font-size: 13px; cursor: pointer;
+  }
+  .sidebar-btn:hover { border-color: var(--accent1); }
+
+  .status-row { margin-top: auto; display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); }
+  .status-dot { width: 8px; height: 8px; border-radius: 50%; background: #666; flex-shrink: 0; }
+  .status-dot.online { background: #3ecf6f; box-shadow: 0 0 8px #3ecf6f88; }
+  .status-dot.offline { background: #e5484d; box-shadow: 0 0 8px #e5484d88; }
+
+  /* Main chat column */
+  .main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+  .topbar {
+    padding: 14px 24px; border-bottom: 1px solid var(--border); display: flex;
+    align-items: center; justify-content: space-between; background: var(--panel);
+  }
+  .topbar .title { font-size: 14px; font-weight: 600; display: flex; align-items: center; gap: 12px; }
+  .topbar .meta { font-size: 12px; color: var(--muted); }
+  .icon-btn {
+    background: var(--panel-2); color: var(--text); border: 1px solid var(--border);
+    border-radius: 8px; width: 30px; height: 30px; cursor: pointer; font-size: 14px;
+    display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+  }
+  .icon-btn:hover { border-color: var(--accent1); }
+
+  #chat {
+    flex: 1; overflow-y: auto; padding: 24px; display: flex; flex-direction: column; gap: 18px;
+    scroll-behavior: smooth;
+  }
+  .row { display: flex; gap: 10px; max-width: 780px; }
+  .row.user { align-self: flex-end; flex-direction: row-reverse; }
+  .row.assistant { align-self: flex-start; }
+  .avatar {
+    width: 30px; height: 30px; border-radius: 50%; flex-shrink: 0; display: flex;
+    align-items: center; justify-content: center; font-size: 12px; font-weight: 700; color: #fff;
+  }
+  .row.user .avatar { background: linear-gradient(135deg, #3b82f6, #6366f1); }
+  .row.assistant .avatar { background: linear-gradient(135deg, var(--accent1), var(--accent2)); }
+
+  .bubble-wrap { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+  .bubble {
+    padding: 11px 15px; border-radius: var(--radius); line-height: 1.55; font-size: 14.5px;
+    word-wrap: break-word; overflow-wrap: break-word;
+  }
+  .row.user .bubble { background: var(--user-bubble); border-top-right-radius: 4px; }
+  .row.assistant .bubble { background: var(--assistant-bubble); border: 1px solid var(--border); border-top-left-radius: 4px; }
+  .bubble.error { background: var(--error) !important; border-color: #a33 !important; }
+
+  .bubble p { margin: 0 0 8px; }
+  .bubble p:last-child { margin-bottom: 0; }
+  .bubble ul, .bubble ol { margin: 6px 0; padding-left: 22px; }
+  .bubble li { margin: 3px 0; }
+  .bubble h3, .bubble h4, .bubble h5 { margin: 10px 0 6px; }
+  .bubble code {
+    background: #00000055; padding: 1px 5px; border-radius: 4px; font-size: 13px;
+    font-family: "SF Mono", Consolas, monospace;
+  }
+  .bubble pre {
+    background: #00000066; border: 1px solid var(--border); border-radius: 8px;
+    padding: 10px 12px; overflow-x: auto; margin: 8px 0;
+  }
+  .bubble pre code { background: none; padding: 0; }
+
+  .meta-line { font-size: 11px; color: var(--muted); padding: 0 4px; }
+
+  .typing { display: inline-flex; gap: 4px; padding: 4px 2px; }
+  .typing span {
+    width: 6px; height: 6px; border-radius: 50%; background: var(--muted);
+    animation: bounce 1.2s infinite ease-in-out;
+  }
+  .typing span:nth-child(2) { animation-delay: .15s; }
+  .typing span:nth-child(3) { animation-delay: .3s; }
+  @keyframes bounce { 0%, 60%, 100% { transform: translateY(0); opacity: .4; } 30% { transform: translateY(-5px); opacity: 1; } }
+
+  .input-bar {
+    padding: 16px 24px 20px; background: var(--panel); border-top: 1px solid var(--border);
+    display: flex; gap: 10px; align-items: flex-end;
+  }
+  #promptInput {
+    flex: 1; resize: none; max-height: 160px; background: var(--panel-2); color: var(--text);
+    border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; font-size: 14px;
+    font-family: inherit; line-height: 1.4;
+  }
+  #promptInput:focus { outline: none; border-color: var(--accent1); }
+  .send-btn, .stop-btn {
+    border: none; border-radius: 12px; padding: 0 20px; height: 44px; font-size: 14px; font-weight: 600;
+    cursor: pointer; color: #fff; flex-shrink: 0;
+  }
+  .send-btn { background: linear-gradient(135deg, var(--accent1), var(--accent2)); }
+  .send-btn:disabled { background: #3a3f4d; cursor: not-allowed; }
+  .stop-btn { background: #e5484d; }
+
+  #chat::-webkit-scrollbar, .sidebar::-webkit-scrollbar { width: 8px; }
+  #chat::-webkit-scrollbar-thumb, .sidebar::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+  .modal-overlay {
+    position: fixed; inset: 0; background: #000000aa; display: flex; align-items: center;
+    justify-content: center; z-index: 100;
+  }
+  .modal-card {
+    background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 24px; width: 320px; display: flex; flex-direction: column; gap: 12px;
+  }
+  .modal-card h2 { margin: 0; font-size: 16px; }
+  .modal-card p { margin: 0; font-size: 12.5px; color: var(--muted); line-height: 1.5; }
+  .modal-card input {
+    background: var(--panel-2); color: var(--text); border: 1px solid var(--border);
+    border-radius: 8px; padding: 9px 11px; font-size: 13px; width: 100%;
+  }
+  .modal-card input:focus { outline: none; border-color: var(--accent1); }
+  .modal-card .err { color: #e5484d; font-size: 12px; min-height: 14px; }
+  .modal-card button {
+    background: linear-gradient(135deg, var(--accent1), var(--accent2)); color: #fff; border: none;
+    border-radius: 8px; padding: 9px; font-size: 13px; font-weight: 600; cursor: pointer;
+  }
+</style>
+</head>
+<body>
+
+<div class="app">
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="dot-logo"></div>
+      <div>
+        <h1>Qwen3-32B Studio</h1>
+        <div class="sub">local vLLM playground</div>
+      </div>
+    </div>
+
+    <div class="field">
+      <label>System / Initial Prompt</label>
+      <textarea id="systemPrompt" rows="7">You are a highly knowledgeable, professional AI assistant. Answer with accuracy, clarity, and appropriate depth. Structure longer answers with short paragraphs, bullet points, or headings when helpful. Be direct and confident, avoid unnecessary hedging or filler, and admit uncertainty only when genuinely warranted.</textarea>
+    </div>
+
+    <div class="field">
+      <label>Temperature <span class="val" id="tempVal">0.6</span></label>
+      <input type="range" id="tempSlider" min="0" max="1.5" step="0.05" value="0.6">
+    </div>
+
+    <div class="field">
+      <label>Top P <span class="val" id="topPVal">0.95</span></label>
+      <input type="range" id="topPSlider" min="0.1" max="1" step="0.05" value="0.95">
+    </div>
+
+    <details>
+      <summary>Advanced settings</summary>
+      <div class="field">
+        <label>Max tokens</label>
+        <input type="number" id="maxTokens" value="1024">
+      </div>
+      <div class="field">
+        <label>API base URL</label>
+        <input type="text" id="baseUrl" value="" placeholder="(same origin, via proxy)">
+      </div>
+      <div class="field">
+        <label>Model name</label>
+        <input type="text" id="modelName" value="./Qwen3-32B">
+      </div>
+    </details>
+
+    <button class="sidebar-btn" id="clearBtn">Clear conversation</button>
+
+    <div class="status-row">
+      <div class="status-dot" id="statusDot"></div>
+      <span id="statusText">checking connection...</span>
+    </div>
+  </aside>
+
+  <main class="main">
+    <div class="topbar">
+      <div class="title"><button class="icon-btn" id="toggleSidebar" title="Toggle settings panel">&#9776;</button> Chat</div>
+      <div class="meta" id="genMeta"></div>
+    </div>
+    <div id="chat"></div>
+    <div class="input-bar">
+      <textarea id="promptInput" rows="1" placeholder="Message the model... (Enter to send, Shift+Enter for newline)"></textarea>
+      <button class="send-btn" id="sendBtn">Send</button>
+      <button class="stop-btn" id="stopBtn" style="display:none">Stop</button>
+    </div>
+  </main>
+</div>
+
+<div class="modal-overlay" id="keyModal" style="display:none">
+  <div class="modal-card">
+    <h2>Access key required</h2>
+    <p>This model endpoint is protected. Enter the access key you were given to start chatting.</p>
+    <input type="text" id="keyInput" placeholder="Access key" autocomplete="off">
+    <div class="err" id="keyErr"></div>
+    <button id="keySubmit">Continue</button>
+  </div>
+</div>
+
+<script>
+const chatEl = document.getElementById('chat');
+const promptEl = document.getElementById('promptInput');
+const sendBtn = document.getElementById('sendBtn');
+const stopBtn = document.getElementById('stopBtn');
+const genMeta = document.getElementById('genMeta');
+const baseUrlEl = document.getElementById('baseUrl');
+const modelEl = document.getElementById('modelName');
+const systemPromptEl = document.getElementById('systemPrompt');
+const tempSlider = document.getElementById('tempSlider');
+const tempVal = document.getElementById('tempVal');
+const topPSlider = document.getElementById('topPSlider');
+const topPVal = document.getElementById('topPVal');
+const maxTokensEl = document.getElementById('maxTokens');
+const statusDot = document.getElementById('statusDot');
+const statusText = document.getElementById('statusText');
+const sidebarEl = document.querySelector('.sidebar');
+const toggleSidebarBtn = document.getElementById('toggleSidebar');
+
+toggleSidebarBtn.onclick = () => {
+  sidebarEl.classList.toggle('collapsed');
+  localStorage.setItem('qwenStudioSidebarCollapsed', sidebarEl.classList.contains('collapsed') ? '1' : '0');
+};
+if (localStorage.getItem('qwenStudioSidebarCollapsed') === '1') sidebarEl.classList.add('collapsed');
+
+let messages = [];
+let controller = null;
+
+// ---------- access key management ----------
+const keyModal = document.getElementById('keyModal');
+const keyInput = document.getElementById('keyInput');
+const keyErr = document.getElementById('keyErr');
+const keySubmit = document.getElementById('keySubmit');
+
+let AUTH_KEY = new URLSearchParams(location.search).get('key') || localStorage.getItem('qwenAuthKey') || '';
+if (new URLSearchParams(location.search).get('key')) {
+  localStorage.setItem('qwenAuthKey', AUTH_KEY);
+  history.replaceState({}, '', location.pathname); // scrub key out of the visible URL/history
+}
+
+function authHeaders(extra) {
+  const h = Object.assign({}, extra || {});
+  if (AUTH_KEY) h['X-Auth-Key'] = AUTH_KEY;
+  return h;
+}
+
+function showKeyModal(message) {
+  keyErr.textContent = message || '';
+  keyModal.style.display = 'flex';
+  keyInput.value = '';
+  keyInput.focus();
+}
+function hideKeyModal() { keyModal.style.display = 'none'; }
+
+keySubmit.onclick = submitKey;
+keyInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') submitKey(); });
+
+async function submitKey() {
+  const val = keyInput.value.trim();
+  if (!val) { keyErr.textContent = 'Please enter a key.'; return; }
+  AUTH_KEY = val;
+  const ok = await checkHealth();
+  if (ok) {
+    localStorage.setItem('qwenAuthKey', AUTH_KEY);
+    hideKeyModal();
+  } else {
+    keyErr.textContent = 'That key was rejected. Try again.';
+  }
+}
+
+// ---------- persistence ----------
+const PERSIST_KEYS = ['baseUrl:value', 'modelName:value', 'systemPrompt:value', 'maxTokens:value'];
+function loadPersisted() {
+  try {
+    const saved = JSON.parse(localStorage.getItem('qwenStudioSettings') || '{}');
+    if (saved.baseUrl) baseUrlEl.value = saved.baseUrl;
+    if (saved.modelName) modelEl.value = saved.modelName;
+    if (saved.systemPrompt) systemPromptEl.value = saved.systemPrompt;
+    if (saved.maxTokens) maxTokensEl.value = saved.maxTokens;
+    if (saved.temp) tempSlider.value = saved.temp;
+    if (saved.topP) topPSlider.value = saved.topP;
+  } catch (e) {}
+}
+function savePersisted() {
+  localStorage.setItem('qwenStudioSettings', JSON.stringify({
+    baseUrl: baseUrlEl.value, modelName: modelEl.value, systemPrompt: systemPromptEl.value,
+    maxTokens: maxTokensEl.value, temp: tempSlider.value, topP: topPSlider.value
+  }));
+}
+[baseUrlEl, modelEl, systemPromptEl, maxTokensEl, tempSlider, topPSlider].forEach(el =>
+  el.addEventListener('change', savePersisted)
+);
+loadPersisted();
+
+// ---------- sliders ----------
+tempSlider.addEventListener('input', () => tempVal.textContent = tempSlider.value);
+topPSlider.addEventListener('input', () => topPVal.textContent = topPSlider.value);
+tempVal.textContent = tempSlider.value;
+topPVal.textContent = topPSlider.value;
+
+// ---------- connection health ----------
+async function checkHealth() {
+  try {
+    const res = await fetch(baseUrlEl.value.replace(/\/+$/, '') + '/v1/models', {
+      signal: AbortSignal.timeout(4000),
+      headers: authHeaders()
+    });
+    if (res.status === 403) {
+      statusDot.className = 'status-dot offline';
+      statusText.textContent = 'key rejected';
+      showKeyModal(AUTH_KEY ? 'That key was rejected. Try again.' : '');
+      return false;
+    }
+    if (res.ok) {
+      statusDot.className = 'status-dot online';
+      statusText.textContent = 'connected';
+      return true;
+    }
+    throw new Error();
+  } catch (e) {
+    statusDot.className = 'status-dot offline';
+    statusText.textContent = 'unreachable';
+    return false;
+  }
+}
+checkHealth();
+setInterval(checkHealth, 10000);
+
+// ---------- clear ----------
+document.getElementById('clearBtn').onclick = () => {
+  messages = [];
+  chatEl.innerHTML = '';
+  genMeta.textContent = '';
+};
+
+// ---------- markdown rendering ----------
+function escapeHtml(s) {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+function inlineFormat(s) {
+  return s
+    .replace(/`([^`]+)`/g, '<code>$1</code>')
+    .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*([^*]+)\*/g, '<em>$1</em>');
+}
+function renderBlock(text) {
+  const lines = escapeHtml(text).split('\n');
+  let html = '', inList = false, listType = null, para = [];
+  const flush = () => { if (para.length) { html += '<p>' + para.join('<br>') + '</p>'; para = []; } };
+  const closeList = () => { if (inList) { html += listType === 'ol' ? '</ol>' : '</ul>'; inList = false; } };
+  for (const line of lines) {
+    const h = line.match(/^(#{1,3})\s+(.*)/);
+    const ul = line.match(/^[-*]\s+(.*)/);
+    const ol = line.match(/^\d+\.\s+(.*)/);
+    if (h) { flush(); closeList(); const lvl = h[1].length + 2; html += `<h${lvl}>${inlineFormat(h[2])}</h${lvl}>`; }
+    else if (ul) { flush(); if (!inList || listType !== 'ul') { closeList(); html += '<ul>'; inList = true; listType = 'ul'; } html += `<li>${inlineFormat(ul[1])}</li>`; }
+    else if (ol) { flush(); if (!inList || listType !== 'ol') { closeList(); html += '<ol>'; inList = true; listType = 'ol'; } html += `<li>${inlineFormat(ol[1])}</li>`; }
+    else if (line.trim() === '') { flush(); closeList(); }
+    else { closeList(); para.push(inlineFormat(line)); }
+  }
+  flush(); closeList();
+  return html;
+}
+function renderMarkdown(text) {
+  const parts = text.split('```');
+  return parts.map((part, i) => {
+    if (i % 2 === 1) {
+      const nl = part.indexOf('\n');
+      let lang = '', code = part;
+      if (nl !== -1) {
+        const first = part.slice(0, nl).trim();
+        if (/^[a-zA-Z0-9_+-]*$/.test(first)) { lang = first; code = part.slice(nl + 1); }
+      }
+      return `<pre><code>${escapeHtml(code)}</code></pre>`;
+    }
+    return renderBlock(part);
+  }).join('');
+}
+
+// ---------- think stripping ----------
+function stripThink(text) {
+  let cleaned = text.replace(/<think>[\s\S]*?<\/think>/g, '');
+  const openIdx = cleaned.indexOf('<think>');
+  if (openIdx !== -1) cleaned = cleaned.slice(0, openIdx);
+  return cleaned.replace(/^\s+/, '');
+}
+function isThinking(text) {
+  const openIdx = text.lastIndexOf('<think>');
+  if (openIdx === -1) return false;
+  return text.lastIndexOf('</think>') < openIdx;
+}
+
+// ---------- bubble helpers ----------
+function addRow(role) {
+  const row = document.createElement('div');
+  row.className = 'row ' + role;
+  const avatar = document.createElement('div');
+  avatar.className = 'avatar';
+  avatar.textContent = role === 'user' ? 'U' : 'AI';
+  const wrap = document.createElement('div');
+  wrap.className = 'bubble-wrap';
+  const bubble = document.createElement('div');
+  bubble.className = 'bubble';
+  wrap.appendChild(bubble);
+  row.appendChild(avatar);
+  row.appendChild(wrap);
+  chatEl.appendChild(row);
+  chatEl.scrollTop = chatEl.scrollHeight;
+  return { row, bubble, wrap };
+}
+function addMeta(wrap, text) {
+  const m = document.createElement('div');
+  m.className = 'meta-line';
+  m.textContent = text;
+  wrap.appendChild(m);
+}
+
+// ---------- auto-resize textarea ----------
+promptEl.addEventListener('input', () => {
+  promptEl.style.height = 'auto';
+  promptEl.style.height = Math.min(promptEl.scrollHeight, 160) + 'px';
+});
+promptEl.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
+});
+sendBtn.onclick = send;
+stopBtn.onclick = () => { if (controller) controller.abort(); };
+
+// ---------- send ----------
+async function send() {
+  const text = promptEl.value.trim();
+  if (!text) return;
+  promptEl.value = '';
+  promptEl.style.height = 'auto';
+  messages.push({ role: 'user', content: text });
+  const { bubble: userBubble } = addRow('user');
+  userBubble.textContent = text;
+
+  const { bubble: aiBubble, wrap: aiWrap } = addRow('assistant');
+  aiBubble.innerHTML = '<div class="typing"><span></span><span></span><span></span></div>';
+
+  sendBtn.style.display = 'none';
+  stopBtn.style.display = 'inline-block';
+  genMeta.textContent = 'Generating...';
+
+  const base = baseUrlEl.value.replace(/\/+$/, '');
+  const started = performance.now();
+  let tokenCount = 0;
+  controller = new AbortController();
+
+  try {
+    const res = await fetch(base + '/v1/chat/completions', {
+      method: 'POST',
+      headers: authHeaders({ 'Content-Type': 'application/json' }),
+      signal: controller.signal,
+      body: JSON.stringify({
+        model: modelEl.value,
+        messages: [{ role: 'system', content: systemPromptEl.value }, ...messages],
+        temperature: parseFloat(tempSlider.value),
+        top_p: parseFloat(topPSlider.value),
+        max_tokens: parseInt(maxTokensEl.value) || 1024,
+        stream: true
+      })
+    });
+
+    if (res.status === 403) {
+      messages.pop(); // don't keep the user turn that never got answered
+      aiBubble.parentElement.parentElement.remove();
+      showKeyModal('That key was rejected. Try again.');
+      genMeta.textContent = '';
+      return;
+    }
+    if (!res.ok || !res.body) {
+      const errText = await res.text().catch(() => res.statusText);
+      throw new Error('HTTP ' + res.status + ': ' + errText);
+    }
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '', full = '', firstToken = true;
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop();
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed.startsWith('data:')) continue;
+        const payload = trimmed.slice(5).trim();
+        if (payload === '[DONE]') continue;
+        try {
+          const json = JSON.parse(payload);
+          const delta = json.choices?.[0]?.delta?.content;
+          if (delta) {
+            if (firstToken) { aiBubble.innerHTML = ''; firstToken = false; }
+            full += delta;
+            tokenCount++;
+            const thinking = isThinking(full);
+            aiBubble.innerHTML = thinking ? '' : (renderMarkdown(stripThink(full)) || '');
+            genMeta.textContent = thinking ? 'Thinking...' : 'Generating...';
+            chatEl.scrollTop = chatEl.scrollHeight;
+          }
+        } catch (e) { /* ignore partial/malformed chunk */ }
+      }
+    }
+
+    const cleaned = stripThink(full);
+    aiBubble.innerHTML = renderMarkdown(cleaned) || '<p><em>(empty response)</em></p>';
+    messages.push({ role: 'assistant', content: cleaned });
+    const elapsed = ((performance.now() - started) / 1000).toFixed(1);
+    addMeta(aiWrap, `${elapsed}s`);
+    genMeta.textContent = '';
+  } catch (err) {
+    if (err.name === 'AbortError') {
+      genMeta.textContent = 'Stopped';
+    } else {
+      aiBubble.classList.add('error');
+      aiBubble.textContent = 'Error: ' + err.message;
+      genMeta.textContent = 'Request failed';
+    }
+  } finally {
+    sendBtn.style.display = 'inline-block';
+    stopBtn.style.display = 'none';
+    controller = null;
+  }
+}
+</script>
+
+</body>
+</html>

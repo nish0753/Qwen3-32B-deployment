@@ -1,0 +1,133 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: qwen-inference
+---
+# 1. Model Storage (Mounting local /root/Qwen3-32B folder)
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: qwen3-model-pv
+spec:
+  capacity:
+    storage: 100Gi
+  accessModes:
+    - ReadOnlyMany
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: local-storage
+  hostPath:
+    path: /root/Qwen3-32B
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: qwen3-model-pvc
+  namespace: qwen-inference
+spec:
+  accessModes:
+    - ReadOnlyMany
+  storageClassName: local-storage
+  resources:
+    requests:
+      storage: 100Gi
+---
+# 2. vLLM Server Deployment & Service (4x GPUs + Shared Memory)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vllm-qwen3-32b
+  namespace: qwen-inference
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: vllm-qwen3-32b
+  template:
+    metadata:
+      labels:
+        app: vllm-qwen3-32b
+    spec:
+      containers:
+      - name: vllm
+        image: nish0753/qwen3-32b-vllm:v1
+        imagePullPolicy: IfNotPresent
+        command:
+        - python3
+        - -m
+        - vllm.entrypoints.openai.api_server
+        - --model=/model
+        - --served-model-name=./Qwen3-32B
+        - --tensor-parallel-size=4
+        - --max-model-len=8192
+        - --dtype=half
+        - --disable-custom-all-reduce
+        ports:
+        - containerPort: 8000
+        resources:
+          limits:
+            nvidia.com/gpu: "4"
+          requests:
+            nvidia.com/gpu: "4"
+        volumeMounts:
+        - name: model-weights
+          mountPath: /model
+        - name: dshm
+          mountPath: /dev/shm
+      volumes:
+      - name: model-weights
+        persistentVolumeClaim:
+          claimName: qwen3-model-pvc
+      - name: dshm
+        emptyDir:
+          medium: Memory
+          sizeLimit: 16Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: vllm-service
+  namespace: qwen-inference
+spec:
+  selector:
+    app: vllm-qwen3-32b
+  ports:
+  - port: 8000
+    targetPort: 8000
+  type: ClusterIP
+---
+# 3. Chat UI Frontend Deployment & Service
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: chat-frontend
+  namespace: qwen-inference
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: chat-frontend
+  template:
+    metadata:
+      labels:
+        app: chat-frontend
+    spec:
+      containers:
+      - name: nginx
+        image: nish0753/qwen3-chat-frontend:v1
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 80
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: frontend-service
+  namespace: qwen-inference
+spec:
+  selector:
+    app: chat-frontend
+  ports:
+  - port: 80
+    targetPort: 80
+    nodePort: 30080
+  type: NodePort
