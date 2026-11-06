@@ -4,6 +4,8 @@
 # ==============================================================================
 set -e
 
+export PATH="$HOME/.local/bin:/root/.local/bin:$PATH"
+
 echo "=================================================================="
 echo "🚀 Initializing Qwen3-32B Single-A100 Deployment on RunPod"
 echo "=================================================================="
@@ -41,7 +43,11 @@ if [ -d "$MODEL_DIR" ] && [ -f "$MODEL_DIR/config.json" ]; then
 else
   echo "⬇️ Downloading Qwen3-32B model weights to $MODEL_DIR (~65 GB)..."
   export HF_HUB_ENABLE_HF_TRANSFER=1
-  huggingface-cli download Qwen/Qwen3-32B --local-dir "$MODEL_DIR"
+  python3 -c "
+import os
+from huggingface_hub import snapshot_download
+snapshot_download('Qwen/Qwen3-32B', local_dir='$MODEL_DIR')
+"
 fi
 
 # Ensure symlink from /root/Qwen3-32B
