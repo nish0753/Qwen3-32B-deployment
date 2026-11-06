@@ -1,0 +1,29 @@
+server {
+  listen 80;
+
+  location / {
+    root /usr/share/nginx/html;
+    index index.html;
+    try_files $uri $uri/ /index.html;
+  }
+
+  location /v1/ {
+    proxy_pass http://${UPSTREAM_HOST}/v1/;
+    proxy_buffering off;
+    proxy_read_timeout 3600s;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+  }
+
+  location /metrics {
+    proxy_pass http://${UPSTREAM_HOST}/metrics;
+    proxy_buffering off;
+    proxy_read_timeout 60s;
+  }
+
+  location /health {
+    proxy_pass http://${UPSTREAM_HOST}/health;
+    proxy_buffering off;
+  }
+}
+

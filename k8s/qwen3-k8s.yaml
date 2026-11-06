@@ -3,7 +3,7 @@ kind: Namespace
 metadata:
   name: qwen-inference
 ---
-# 1. Model Storage (Mounting local /root/Qwen3-32B folder)
+# 1. Model Storage (Mounting host /root/Qwen3-32B folder)
 apiVersion: v1
 kind: PersistentVolume
 metadata:
@@ -31,7 +31,7 @@ spec:
     requests:
       storage: 100Gi
 ---
-# 2. vLLM Server Deployment & Service (4x GPUs + Shared Memory)
+# 2. vLLM Server Deployment & Service (1x NVIDIA A100 GPU + Shared Memory)
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -49,30 +49,44 @@ spec:
     spec:
       containers:
       - name: vllm
-        image: nish0753/qwen3-32b-vllm:v1
+        image: qwen3-32b-vllm:a100
         imagePullPolicy: IfNotPresent
         command:
         - python3
         - -m
         - vllm.entrypoints.openai.api_server
         - --model=/model
-        - --served-model-name=./Qwen3-32B
-        - --tensor-parallel-size=4
+        - --served-model-name=Qwen3-32B
+        - --tensor-parallel-size=1
         - --max-model-len=8192
-        - --dtype=half
-        - --disable-custom-all-reduce
+        - --dtype=bfloat16
+        - --gpu-memory-utilization=0.92
+        - --trust-remote-code
         ports:
         - containerPort: 8000
+          name: http-vllm
         resources:
           limits:
-            nvidia.com/gpu: "4"
+            nvidia.com/gpu: "1"
           requests:
-            nvidia.com/gpu: "4"
+            nvidia.com/gpu: "1"
         volumeMounts:
         - name: model-weights
           mountPath: /model
         - name: dshm
           mountPath: /dev/shm
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 45
+          periodSeconds: 10
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 90
+          periodSeconds: 20
       volumes:
       - name: model-weights
         persistentVolumeClaim:
@@ -93,9 +107,10 @@ spec:
   ports:
   - port: 8000
     targetPort: 8000
+    name: http-vllm
   type: ClusterIP
 ---
-# 3. Chat UI Frontend Deployment & Service
+# 3. Chat UI Frontend Deployment & Service (NodePort 30080)
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -113,10 +128,14 @@ spec:
     spec:
       containers:
       - name: nginx
-        image: nish0753/qwen3-chat-frontend:v1
+        image: qwen3-chat-frontend:a100
         imagePullPolicy: IfNotPresent
+        env:
+        - name: UPSTREAM_HOST
+          value: "vllm-service.qwen-inference.svc.cluster.local:8000"
         ports:
         - containerPort: 80
+      volumes: []
 ---
 apiVersion: v1
 kind: Service

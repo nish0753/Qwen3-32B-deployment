@@ -25,6 +25,9 @@ build_pdf.py
 *.log
 *.deb
 *.sh
+!vllm-qwen3-32b-image/entrypoint.sh
+__pycache__/
+*.pyc
 cloudflared
 1
 snap/

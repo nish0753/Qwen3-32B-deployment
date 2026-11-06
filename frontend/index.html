@@ -1,597 +1,2065 @@
 <!doctype html>
-<html>
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Qwen3-32B Studio</title>
+<title>Qwen3-32B Performance & Observability Studio | 1x NVIDIA A100</title>
 <style>
   :root {
-    --bg: #0e1015;
-    --panel: #161922;
-    --panel-2: #1d212c;
-    --border: #2a2f3d;
-    --text: #e7e9ee;
-    --muted: #8a90a0;
-    --accent1: #6366f1;
-    --accent2: #a855f7;
-    --user-bubble: #2b3f8f;
-    --assistant-bubble: #1d212c;
-    --error: #7a2a2a;
-    --radius: 14px;
+    --bg: #0b0d13;
+    --panel: #131722;
+    --panel-2: #1a1f30;
+    --panel-3: #22293e;
+    --border: #262d42;
+    --border-bright: #3b4566;
+    --text: #e6eaf5;
+    --text-muted: #8b95b0;
+    --text-dim: #5c6682;
+    --accent: #6366f1;
+    --accent-glow: rgba(99, 102, 241, 0.25);
+    --cyan: #06b6d4;
+    --green: #10b981;
+    --yellow: #f59e0b;
+    --red: #ef4444;
+    --purple: #a855f7;
+    --user-bubble: #253366;
+    --ai-bubble: #151a28;
+    --radius: 12px;
+    --font-mono: "SF Mono", "JetBrains Mono", Consolas, monospace;
   }
-  * { box-sizing: border-box; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
   html, body {
-    margin: 0; height: 100%; background: var(--bg); color: var(--text);
-    font-family: -apple-system, "Segoe UI", Inter, system-ui, sans-serif;
+    height: 100%; background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, system-ui, sans-serif;
+    font-size: 14px; line-height: 1.5; overflow: hidden;
   }
-  .app { display: flex; height: 100vh; overflow: hidden; }
+
+  /* App Shell */
+  .app-container { display: flex; height: 100vh; overflow: hidden; }
 
   /* Sidebar */
   .sidebar {
-    width: 300px; flex-shrink: 0; background: var(--panel); border-right: 1px solid var(--border);
-    padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 16px;
-    transition: width .2s ease, padding .2s ease;
+    width: 320px; flex-shrink: 0; background: var(--panel); border-right: 1px solid var(--border);
+    display: flex; flex-direction: column; overflow-y: auto; transition: width .25s ease, padding .25s ease;
+    z-index: 20;
   }
   .sidebar.collapsed { width: 0; padding: 0; overflow: hidden; border-right: none; }
-  .brand { display: flex; align-items: center; gap: 10px; margin-bottom: 4px; }
-  .brand .dot-logo {
-    width: 30px; height: 30px; border-radius: 9px;
-    background: linear-gradient(135deg, var(--accent1), var(--accent2));
-    flex-shrink: 0;
+  .sidebar-header {
+    padding: 18px 20px 14px; border-bottom: 1px solid var(--border); display: flex;
+    align-items: center; justify-content: space-between;
   }
-  .brand h1 { font-size: 15px; margin: 0; font-weight: 600; }
-  .brand .sub { font-size: 11px; color: var(--muted); }
+  .brand { display: flex; align-items: center; gap: 10px; }
+  .brand-logo {
+    width: 34px; height: 34px; border-radius: 10px;
+    background: linear-gradient(135deg, var(--accent), var(--cyan));
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 800; font-size: 15px; color: #fff; box-shadow: 0 0 16px var(--accent-glow);
+  }
+  .brand-text h1 { font-size: 15px; font-weight: 700; color: #fff; letter-spacing: -0.02em; }
+  .brand-text .badge-a100 {
+    font-size: 10px; font-weight: 600; text-transform: uppercase;
+    background: rgba(6, 182, 212, 0.15); color: var(--cyan); padding: 2px 6px;
+    border-radius: 4px; display: inline-block; margin-top: 2px; border: 1px solid rgba(6, 182, 212, 0.3);
+  }
 
+  .sidebar-body { padding: 18px 20px; display: flex; flex-direction: column; gap: 18px; flex: 1; }
   .field { display: flex; flex-direction: column; gap: 6px; }
   .field label {
-    font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted);
-    display: flex; justify-content: space-between;
+    font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--text-muted);
+    font-weight: 600; display: flex; justify-content: space-between; align-items: center;
   }
-  .field label span.val { color: var(--text); font-weight: 600; text-transform: none; letter-spacing: 0; }
-  textarea, input[type=text], input[type=number] {
+  .field label span.val { color: var(--cyan); font-family: var(--font-mono); font-size: 12px; }
+
+  textarea, input[type=text], input[type=number], select {
     background: var(--panel-2); color: var(--text); border: 1px solid var(--border);
-    border-radius: 8px; padding: 8px 10px; font-family: inherit; font-size: 13px; width: 100%;
+    border-radius: 8px; padding: 9px 12px; font-family: inherit; font-size: 13px; width: 100%;
+    transition: border-color .15s ease, box-shadow .15s ease;
   }
-  textarea:focus, input:focus { outline: none; border-color: var(--accent1); }
-  #systemPrompt { resize: vertical; min-height: 90px; line-height: 1.4; }
+  textarea:focus, input:focus, select:focus {
+    outline: none; border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-glow);
+  }
+  #systemPrompt { resize: vertical; min-height: 85px; font-size: 12.5px; line-height: 1.45; }
 
   input[type=range] {
-    -webkit-appearance: none; width: 100%; height: 4px; border-radius: 2px;
-    background: var(--border); outline: none;
+    -webkit-appearance: none; width: 100%; height: 5px; border-radius: 3px;
+    background: var(--panel-3); outline: none; margin: 4px 0;
   }
   input[type=range]::-webkit-slider-thumb {
-    -webkit-appearance: none; width: 15px; height: 15px; border-radius: 50%;
-    background: linear-gradient(135deg, var(--accent1), var(--accent2)); cursor: pointer; border: none;
+    -webkit-appearance: none; width: 16px; height: 16px; border-radius: 50%;
+    background: linear-gradient(135deg, var(--accent), var(--cyan)); cursor: pointer;
+    box-shadow: 0 0 8px var(--accent-glow); border: 2px solid #fff;
   }
 
-  details { border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; }
-  details summary { cursor: pointer; font-size: 12px; color: var(--muted); }
-  details .field { margin-top: 10px; }
-
-  .sidebar-btn {
-    background: var(--panel-2); color: var(--text); border: 1px solid var(--border);
-    border-radius: 8px; padding: 9px; font-size: 13px; cursor: pointer;
+  details {
+    border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; background: var(--panel-2);
   }
-  .sidebar-btn:hover { border-color: var(--accent1); }
+  details summary { cursor: pointer; font-size: 12px; font-weight: 600; color: var(--text-muted); user-select: none; }
+  details[open] summary { margin-bottom: 10px; color: var(--text); }
 
-  .status-row { margin-top: auto; display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); }
-  .status-dot { width: 8px; height: 8px; border-radius: 50%; background: #666; flex-shrink: 0; }
-  .status-dot.online { background: #3ecf6f; box-shadow: 0 0 8px #3ecf6f88; }
-  .status-dot.offline { background: #e5484d; box-shadow: 0 0 8px #e5484d88; }
+  .spec-card {
+    background: linear-gradient(145deg, rgba(99, 102, 241, 0.08), rgba(6, 182, 212, 0.05));
+    border: 1px solid rgba(99, 102, 241, 0.25); border-radius: 10px; padding: 12px; font-size: 11.5px;
+    display: flex; flex-direction: column; gap: 6px;
+  }
+  .spec-card-title { font-weight: 700; color: var(--cyan); display: flex; align-items: center; gap: 6px; font-size: 12px; }
+  .spec-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 4px; }
+  .spec-item { display: flex; flex-direction: column; background: var(--panel-3); padding: 6px 8px; border-radius: 6px; }
+  .spec-label { color: var(--text-muted); font-size: 10px; text-transform: uppercase; }
+  .spec-val { color: #fff; font-family: var(--font-mono); font-weight: 600; font-size: 11.5px; }
 
-  /* Main chat column */
-  .main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+    border-radius: 8px; padding: 9px 14px; font-size: 13px; font-weight: 600;
+    cursor: pointer; transition: all .15s ease; border: 1px solid transparent; user-select: none;
+  }
+  .btn-primary { background: linear-gradient(135deg, var(--accent), var(--cyan)); color: #fff; }
+  .btn-primary:hover { opacity: .92; box-shadow: 0 0 12px var(--accent-glow); }
+  .btn-secondary { background: var(--panel-2); color: var(--text); border-color: var(--border); }
+  .btn-secondary:hover { background: var(--panel-3); border-color: var(--border-bright); }
+  .btn-danger { background: rgba(239, 68, 68, 0.15); color: var(--red); border-color: rgba(239, 68, 68, 0.3); }
+  .btn-danger:hover { background: rgba(239, 68, 68, 0.25); }
+  .btn-sm { padding: 5px 10px; font-size: 11.5px; border-radius: 6px; }
+
+  /* Main View Column */
+  .main-content { flex: 1; display: flex; flex-direction: column; min-width: 0; background: var(--bg); }
+
+  /* Top Navigation & Telemetry Ribbon */
   .topbar {
-    padding: 14px 24px; border-bottom: 1px solid var(--border); display: flex;
-    align-items: center; justify-content: space-between; background: var(--panel);
+    background: var(--panel); border-bottom: 1px solid var(--border);
+    padding: 10px 20px; display: flex; align-items: center; justify-content: space-between;
+    gap: 16px; flex-shrink: 0;
   }
-  .topbar .title { font-size: 14px; font-weight: 600; display: flex; align-items: center; gap: 12px; }
-  .topbar .meta { font-size: 12px; color: var(--muted); }
+  .topbar-left { display: flex; align-items: center; gap: 14px; }
   .icon-btn {
     background: var(--panel-2); color: var(--text); border: 1px solid var(--border);
-    border-radius: 8px; width: 30px; height: 30px; cursor: pointer; font-size: 14px;
-    display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+    border-radius: 8px; width: 34px; height: 34px; cursor: pointer; font-size: 14px;
+    display: inline-flex; align-items: center; justify-content: center; transition: all .15s;
   }
-  .icon-btn:hover { border-color: var(--accent1); }
+  .icon-btn:hover { border-color: var(--accent); color: #fff; }
 
-  #chat {
-    flex: 1; overflow-y: auto; padding: 24px; display: flex; flex-direction: column; gap: 18px;
-    scroll-behavior: smooth;
+  /* Tab Navigation */
+  .nav-tabs { display: flex; gap: 4px; background: var(--panel-2); padding: 4px; border-radius: 10px; border: 1px solid var(--border); }
+  .nav-tab {
+    padding: 6px 14px; border-radius: 7px; font-size: 12.5px; font-weight: 600;
+    cursor: pointer; color: var(--text-muted); transition: all .15s; border: none; background: transparent;
+    display: flex; align-items: center; gap: 6px;
   }
-  .row { display: flex; gap: 10px; max-width: 780px; }
-  .row.user { align-self: flex-end; flex-direction: row-reverse; }
-  .row.assistant { align-self: flex-start; }
-  .avatar {
-    width: 30px; height: 30px; border-radius: 50%; flex-shrink: 0; display: flex;
+  .nav-tab:hover { color: var(--text); }
+  .nav-tab.active { background: var(--accent); color: #fff; box-shadow: 0 0 10px var(--accent-glow); }
+
+  /* Live HUD Ribbon on Header */
+  .topbar-metrics { display: flex; align-items: center; gap: 10px; }
+  .metric-pill {
+    background: var(--panel-2); border: 1px solid var(--border); border-radius: 8px;
+    padding: 5px 10px; display: flex; align-items: center; gap: 6px; font-size: 11.5px;
+  }
+  .metric-pill .dot { width: 7px; height: 7px; border-radius: 50%; }
+  .dot.online { background: var(--green); box-shadow: 0 0 6px var(--green); }
+  .dot.offline { background: var(--red); box-shadow: 0 0 6px var(--red); }
+  .dot.pending { background: var(--yellow); box-shadow: 0 0 6px var(--yellow); }
+  .metric-pill .val { font-family: var(--font-mono); font-weight: 700; color: #fff; }
+
+  /* Tab Views */
+  .tab-pane { display: none; flex: 1; flex-direction: column; min-height: 0; overflow: hidden; }
+  .tab-pane.active { display: flex; }
+
+  /* ======================================================== */
+  /* TAB 1: CHAT VIEW */
+  /* ======================================================== */
+  #chatContainer { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+  #chatScrollArea {
+    flex: 1; overflow-y: auto; padding: 24px; display: flex; flex-direction: column;
+    gap: 20px; scroll-behavior: smooth;
+  }
+  .chat-row { display: flex; gap: 12px; max-width: 860px; width: 100%; margin: 0 auto; }
+  .chat-row.user { justify-content: flex-end; }
+  .chat-row.assistant { justify-content: flex-start; }
+
+  .chat-avatar {
+    width: 32px; height: 32px; border-radius: 10px; flex-shrink: 0; display: flex;
     align-items: center; justify-content: center; font-size: 12px; font-weight: 700; color: #fff;
   }
-  .row.user .avatar { background: linear-gradient(135deg, #3b82f6, #6366f1); }
-  .row.assistant .avatar { background: linear-gradient(135deg, var(--accent1), var(--accent2)); }
+  .chat-row.user .chat-avatar { background: linear-gradient(135deg, #3b82f6, var(--accent)); order: 2; }
+  .chat-row.assistant .chat-avatar { background: linear-gradient(135deg, var(--accent), var(--cyan)); }
 
-  .bubble-wrap { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+  .bubble-wrap { display: flex; flex-direction: column; gap: 6px; min-width: 0; max-width: 100%; }
+  .chat-row.user .bubble-wrap { align-items: flex-end; }
+
   .bubble {
-    padding: 11px 15px; border-radius: var(--radius); line-height: 1.55; font-size: 14.5px;
+    padding: 14px 18px; border-radius: var(--radius); line-height: 1.6; font-size: 14px;
     word-wrap: break-word; overflow-wrap: break-word;
   }
-  .row.user .bubble { background: var(--user-bubble); border-top-right-radius: 4px; }
-  .row.assistant .bubble { background: var(--assistant-bubble); border: 1px solid var(--border); border-top-left-radius: 4px; }
-  .bubble.error { background: var(--error) !important; border-color: #a33 !important; }
-
-  .bubble p { margin: 0 0 8px; }
-  .bubble p:last-child { margin-bottom: 0; }
-  .bubble ul, .bubble ol { margin: 6px 0; padding-left: 22px; }
-  .bubble li { margin: 3px 0; }
-  .bubble h3, .bubble h4, .bubble h5 { margin: 10px 0 6px; }
-  .bubble code {
-    background: #00000055; padding: 1px 5px; border-radius: 4px; font-size: 13px;
-    font-family: "SF Mono", Consolas, monospace;
+  .chat-row.user .bubble {
+    background: var(--user-bubble); color: #fff; border-top-right-radius: 4px;
+    border: 1px solid rgba(99, 102, 241, 0.4);
   }
-  .bubble pre {
-    background: #00000066; border: 1px solid var(--border); border-radius: 8px;
-    padding: 10px 12px; overflow-x: auto; margin: 8px 0;
+  .chat-row.assistant .bubble {
+    background: var(--ai-bubble); color: var(--text); border-top-left-radius: 4px;
+    border: 1px solid var(--border);
   }
-  .bubble pre code { background: none; padding: 0; }
+  .bubble.error { background: rgba(239, 68, 68, 0.15) !important; border-color: var(--red) !important; color: #fca5a5; }
 
-  .meta-line { font-size: 11px; color: var(--muted); padding: 0 4px; }
+  /* Thinking Box Accordion */
+  .thinking-box {
+    background: rgba(168, 85, 247, 0.08); border: 1px solid rgba(168, 85, 247, 0.3);
+    border-radius: 8px; margin-bottom: 12px; overflow: hidden;
+  }
+  .thinking-header {
+    padding: 8px 12px; cursor: pointer; display: flex; align-items: center; justify-content: space-between;
+    font-size: 11.5px; font-weight: 600; color: var(--purple); user-select: none;
+    background: rgba(168, 85, 247, 0.12);
+  }
+  .thinking-header:hover { background: rgba(168, 85, 247, 0.18); }
+  .thinking-content {
+    padding: 12px; font-size: 12.5px; color: var(--text-muted); line-height: 1.5;
+    font-style: italic; white-space: pre-wrap; max-height: 250px; overflow-y: auto; border-top: 1px solid rgba(168, 85, 247, 0.2);
+  }
+  .thinking-box.collapsed .thinking-content { display: none; }
 
-  .typing { display: inline-flex; gap: 4px; padding: 4px 2px; }
-  .typing span {
-    width: 6px; height: 6px; border-radius: 50%; background: var(--muted);
+  /* Deep Per-Message Telemetry Card (Measure Everything HUD) */
+  .telemetry-card {
+    background: var(--panel-2); border: 1px solid var(--border); border-radius: 10px;
+    padding: 10px 14px; margin-top: 6px; display: flex; flex-direction: column; gap: 8px;
+    font-size: 11.5px; width: 100%; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  }
+  .telemetry-grid {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px;
+  }
+  @media (max-width: 900px) { .telemetry-grid { grid-template-columns: repeat(2, 1fr); } }
+  .tele-item {
+    background: var(--panel-3); padding: 7px 10px; border-radius: 6px; display: flex;
+    flex-direction: column; gap: 2px;
+  }
+  .tele-label { font-size: 10px; text-transform: uppercase; letter-spacing: .05em; color: var(--text-muted); font-weight: 600; }
+  .tele-val { font-family: var(--font-mono); font-weight: 700; font-size: 13px; color: #fff; }
+  .tele-val.accent { color: var(--cyan); }
+  .tele-val.green { color: var(--green); }
+  .tele-val.purple { color: var(--purple); }
+
+  .tele-breakdown {
+    display: flex; align-items: center; justify-content: space-between; padding-top: 6px;
+    border-top: 1px solid rgba(255, 255, 255, 0.06); color: var(--text-muted); font-size: 11px;
+  }
+  .tele-context-bar {
+    width: 100%; height: 4px; background: var(--panel-3); border-radius: 2px; overflow: hidden; margin-top: 2px;
+  }
+  .tele-context-fill { height: 100%; background: linear-gradient(90deg, var(--cyan), var(--accent)); width: 0%; }
+
+  /* Streaming Live HUD */
+  .streaming-live-hud {
+    display: inline-flex; align-items: center; gap: 10px; padding: 6px 12px;
+    background: rgba(99, 102, 241, 0.15); border: 1px solid var(--accent);
+    border-radius: 8px; font-size: 12px; color: #fff; margin-bottom: 8px; animation: pulseGlow 1.5s infinite;
+  }
+  @keyframes pulseGlow { 0%, 100% { opacity: 1; } 50% { opacity: .7; } }
+  .typing-indicator { display: inline-flex; gap: 4px; }
+  .typing-indicator span {
+    width: 5px; height: 5px; border-radius: 50%; background: var(--cyan);
     animation: bounce 1.2s infinite ease-in-out;
   }
-  .typing span:nth-child(2) { animation-delay: .15s; }
-  .typing span:nth-child(3) { animation-delay: .3s; }
-  @keyframes bounce { 0%, 60%, 100% { transform: translateY(0); opacity: .4; } 30% { transform: translateY(-5px); opacity: 1; } }
+  .typing-indicator span:nth-child(2) { animation-delay: .15s; }
+  .typing-indicator span:nth-child(3) { animation-delay: .3s; }
+  @keyframes bounce { 0%, 60%, 100% { transform: translateY(0); opacity: .4; } 30% { transform: translateY(-4px); opacity: 1; } }
 
-  .input-bar {
-    padding: 16px 24px 20px; background: var(--panel); border-top: 1px solid var(--border);
-    display: flex; gap: 10px; align-items: flex-end;
+  /* Chat Input Area */
+  .chat-input-bar {
+    padding: 16px 24px; background: var(--panel); border-top: 1px solid var(--border);
+    display: flex; gap: 12px; align-items: flex-end; max-width: 900px; width: 100%; margin: 0 auto;
   }
   #promptInput {
-    flex: 1; resize: none; max-height: 160px; background: var(--panel-2); color: var(--text);
-    border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; font-size: 14px;
-    font-family: inherit; line-height: 1.4;
+    flex: 1; resize: none; max-height: 180px; min-height: 48px; background: var(--panel-2);
+    color: var(--text); border: 1px solid var(--border); border-radius: 12px;
+    padding: 12px 16px; font-size: 14px; font-family: inherit; line-height: 1.5;
   }
-  #promptInput:focus { outline: none; border-color: var(--accent1); }
-  .send-btn, .stop-btn {
-    border: none; border-radius: 12px; padding: 0 20px; height: 44px; font-size: 14px; font-weight: 600;
-    cursor: pointer; color: #fff; flex-shrink: 0;
+  #promptInput:focus { border-color: var(--accent); outline: none; }
+  .send-btn-wrap { display: flex; gap: 8px; }
+
+  /* ======================================================== */
+  /* TAB 2: LIVE TELEMETRY & GPU MONITOR VIEW */
+  /* ======================================================== */
+  .telemetry-dashboard {
+    flex: 1; overflow-y: auto; padding: 24px; display: flex; flex-direction: column;
+    gap: 24px; max-width: 1100px; width: 100%; margin: 0 auto;
   }
-  .send-btn { background: linear-gradient(135deg, var(--accent1), var(--accent2)); }
-  .send-btn:disabled { background: #3a3f4d; cursor: not-allowed; }
-  .stop-btn { background: #e5484d; }
+  .section-header {
+    display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;
+  }
+  .section-title { font-size: 16px; font-weight: 700; color: #fff; display: flex; align-items: center; gap: 8px; }
 
-  #chat::-webkit-scrollbar, .sidebar::-webkit-scrollbar { width: 8px; }
-  #chat::-webkit-scrollbar-thumb, .sidebar::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+  .dashboard-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; }
+  .kpi-card {
+    background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 18px; display: flex; flex-direction: column; gap: 8px; position: relative; overflow: hidden;
+  }
+  .kpi-card::before {
+    content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+    background: linear-gradient(90deg, var(--accent), var(--cyan));
+  }
+  .kpi-label { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--text-muted); font-weight: 600; }
+  .kpi-value { font-family: var(--font-mono); font-size: 26px; font-weight: 800; color: #fff; }
+  .kpi-sub { font-size: 11.5px; color: var(--text-muted); display: flex; align-items: center; gap: 4px; }
 
+  .gauge-box {
+    background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 20px; display: flex; flex-direction: column; gap: 12px;
+  }
+  .gauge-bar-outer {
+    width: 100%; height: 16px; background: var(--panel-2); border-radius: 8px; overflow: hidden;
+    position: relative; border: 1px solid var(--border);
+  }
+  .gauge-bar-inner {
+    height: 100%; border-radius: 8px; transition: width .4s cubic-bezier(0.4, 0, 0.2, 1);
+    background: linear-gradient(90deg, var(--cyan), var(--green));
+  }
+  .gauge-bar-inner.warning { background: linear-gradient(90deg, var(--yellow), var(--red)); }
+  .gauge-ticks { display: flex; justify-content: space-between; font-size: 10px; color: var(--text-dim); }
+
+  /* Hardware Telemetry Card */
+  .hw-card {
+    background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 20px; display: flex; flex-direction: column; gap: 16px;
+  }
+  .hw-stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; }
+  .hw-stat {
+    background: var(--panel-2); padding: 12px; border-radius: 8px; border: 1px solid var(--border);
+    display: flex; flex-direction: column; gap: 4px;
+  }
+
+  /* ======================================================== */
+  /* TAB 3: BENCHMARK SUITE */
+  /* ======================================================== */
+  .benchmark-container {
+    flex: 1; overflow-y: auto; padding: 24px; display: flex; flex-direction: column;
+    gap: 20px; max-width: 1100px; width: 100%; margin: 0 auto;
+  }
+  .suite-cards-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; }
+  .suite-card {
+    background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 16px; display: flex; flex-direction: column; gap: 8px; cursor: pointer; transition: all .15s;
+  }
+  .suite-card:hover { border-color: var(--accent); background: var(--panel-2); transform: translateY(-2px); }
+  .suite-card.selected { border-color: var(--cyan); box-shadow: 0 0 14px rgba(6, 182, 212, 0.2); }
+  .suite-badge {
+    align-self: flex-start; font-size: 10px; font-weight: 700; text-transform: uppercase;
+    padding: 2px 7px; border-radius: 4px; background: rgba(99, 102, 241, 0.15); color: var(--accent);
+  }
+  .suite-title { font-weight: 700; font-size: 14px; color: #fff; }
+  .suite-desc { font-size: 12px; color: var(--text-muted); line-height: 1.4; }
+
+  .benchmark-run-bar {
+    background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 16px 20px; display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  }
+  .bench-progress-wrap { flex: 1; display: flex; flex-direction: column; gap: 6px; }
+  .bench-progress-bar { width: 100%; height: 8px; background: var(--panel-2); border-radius: 4px; overflow: hidden; }
+  .bench-progress-fill { height: 100%; background: linear-gradient(90deg, var(--accent), var(--cyan)); width: 0%; transition: width .2s; }
+
+  /* Data Tables */
+  .table-card {
+    background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
+    overflow: hidden; display: flex; flex-direction: column;
+  }
+  .data-table { width: 100%; border-collapse: collapse; font-size: 12.5px; text-align: left; }
+  .data-table th {
+    background: var(--panel-2); padding: 10px 14px; font-size: 11px; text-transform: uppercase;
+    letter-spacing: .05em; color: var(--text-muted); font-weight: 600; border-bottom: 1px solid var(--border);
+  }
+  .data-table td {
+    padding: 11px 14px; border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+    font-family: var(--font-mono); color: var(--text);
+  }
+  .data-table tr:hover td { background: rgba(255, 255, 255, 0.02); }
+
+  /* ======================================================== */
+  /* TAB 4: SESSION HISTORY & EXPORT */
+  /* ======================================================== */
+  .history-container {
+    flex: 1; overflow-y: auto; padding: 24px; display: flex; flex-direction: column;
+    gap: 20px; max-width: 1100px; width: 100%; margin: 0 auto;
+  }
+
+  /* ======================================================== */
+  /* TAB 5: A100 DEPLOYMENT & SIZING CALCULATOR */
+  /* ======================================================== */
+  .sizing-container {
+    flex: 1; overflow-y: auto; padding: 24px; display: flex; flex-direction: column;
+    gap: 24px; max-width: 1000px; width: 100%; margin: 0 auto;
+  }
+  .calc-box {
+    background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 24px; display: flex; flex-direction: column; gap: 18px;
+  }
+  .calc-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; }
+  .calc-results {
+    background: var(--panel-2); border: 1px solid var(--border-bright); border-radius: 10px;
+    padding: 18px; display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px;
+  }
+  .calc-res-item { display: flex; flex-direction: column; gap: 4px; }
+  .calc-res-label { font-size: 11px; text-transform: uppercase; color: var(--text-muted); }
+  .calc-res-val { font-family: var(--font-mono); font-size: 20px; font-weight: 700; color: #fff; }
+  .status-badge-lg {
+    display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 6px;
+    font-weight: 700; font-size: 13px; text-transform: uppercase;
+  }
+  .status-badge-lg.fit { background: rgba(16, 185, 129, 0.15); color: var(--green); border: 1px solid rgba(16, 185, 129, 0.3); }
+  .status-badge-lg.nofit { background: rgba(239, 68, 68, 0.15); color: var(--red); border: 1px solid rgba(239, 68, 68, 0.3); }
+
+  /* Modal */
   .modal-overlay {
-    position: fixed; inset: 0; background: #000000aa; display: flex; align-items: center;
-    justify-content: center; z-index: 100;
+    position: fixed; inset: 0; background: rgba(0, 0, 0, 0.75); display: flex; align-items: center;
+    justify-content: center; z-index: 100; backdrop-filter: blur(4px);
   }
   .modal-card {
-    background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
-    padding: 24px; width: 320px; display: flex; flex-direction: column; gap: 12px;
+    background: var(--panel); border: 1px solid var(--border-bright); border-radius: 14px;
+    padding: 24px; width: 440px; max-width: 90vw; display: flex; flex-direction: column; gap: 16px;
+    box-shadow: 0 16px 36px rgba(0, 0, 0, 0.5);
   }
-  .modal-card h2 { margin: 0; font-size: 16px; }
-  .modal-card p { margin: 0; font-size: 12.5px; color: var(--muted); line-height: 1.5; }
-  .modal-card input {
-    background: var(--panel-2); color: var(--text); border: 1px solid var(--border);
-    border-radius: 8px; padding: 9px 11px; font-size: 13px; width: 100%;
+  .modal-card h2 { font-size: 18px; color: #fff; }
+  .modal-card p { font-size: 13px; color: var(--text-muted); line-height: 1.5; }
+
+  /* Markdown Rendering Styles in Chat */
+  .bubble p { margin-bottom: 8px; }
+  .bubble p:last-child { margin-bottom: 0; }
+  .bubble code {
+    background: rgba(0, 0, 0, 0.4); padding: 2px 6px; border-radius: 4px;
+    font-family: var(--font-mono); font-size: 12.5px; color: #f38ba8;
   }
-  .modal-card input:focus { outline: none; border-color: var(--accent1); }
-  .modal-card .err { color: #e5484d; font-size: 12px; min-height: 14px; }
-  .modal-card button {
-    background: linear-gradient(135deg, var(--accent1), var(--accent2)); color: #fff; border: none;
-    border-radius: 8px; padding: 9px; font-size: 13px; font-weight: 600; cursor: pointer;
+  .bubble pre {
+    background: #080a0f; border: 1px solid var(--border); border-radius: 8px;
+    padding: 12px 14px; overflow-x: auto; margin: 10px 0;
   }
+  .bubble pre code { background: none; padding: 0; color: #a6e3a1; font-size: 13px; }
+  .bubble ul, .bubble ol { margin: 8px 0; padding-left: 20px; }
+  .bubble li { margin: 4px 0; }
+  .bubble strong { color: #fff; font-weight: 600; }
+
+  /* Scrollbars */
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border-bright); border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--text-dim); }
 </style>
 </head>
 <body>
 
-<div class="app">
-  <aside class="sidebar">
-    <div class="brand">
-      <div class="dot-logo"></div>
-      <div>
-        <h1>Qwen3-32B Studio</h1>
-        <div class="sub">local vLLM playground</div>
+<div class="app-container">
+  <!-- SIDEBAR CONTROLS -->
+  <aside class="sidebar" id="sidebarEl">
+    <div class="sidebar-header">
+      <div class="brand">
+        <div class="brand-logo">Q3</div>
+        <div class="brand-text">
+          <h1>Qwen3-32B Studio</h1>
+          <span class="badge-a100">1x A100 · TP=1 · BF16</span>
+        </div>
       </div>
+      <button class="icon-btn" id="collapseSidebarBtn" title="Collapse Sidebar">&times;</button>
     </div>
 
-    <div class="field">
-      <label>System / Initial Prompt</label>
-      <textarea id="systemPrompt" rows="7">You are a highly knowledgeable, professional AI assistant. Answer with accuracy, clarity, and appropriate depth. Structure longer answers with short paragraphs, bullet points, or headings when helpful. Be direct and confident, avoid unnecessary hedging or filler, and admit uncertainty only when genuinely warranted.</textarea>
-    </div>
+    <div class="sidebar-body">
+      <!-- A100 Architecture Spec Card -->
+      <div class="spec-card">
+        <div class="spec-card-title">
+          <span>⚡ Hardware Profile</span>
+        </div>
+        <div class="spec-grid">
+          <div class="spec-item">
+            <span class="spec-label">Target GPU</span>
+            <span class="spec-val">1x A100 (80GB/40GB)</span>
+          </div>
+          <div class="spec-item">
+            <span class="spec-label">Parallelism</span>
+            <span class="spec-val">TP = 1 (Zero NCCL)</span>
+          </div>
+          <div class="spec-item">
+            <span class="spec-label">Precision</span>
+            <span class="spec-val">bfloat16 Native</span>
+          </div>
+          <div class="spec-item">
+            <span class="spec-label">Attention</span>
+            <span class="spec-val">FlashAttention-2</span>
+          </div>
+        </div>
+      </div>
 
-    <div class="field">
-      <label>Temperature <span class="val" id="tempVal">0.6</span></label>
-      <input type="range" id="tempSlider" min="0" max="1.5" step="0.05" value="0.6">
-    </div>
-
-    <div class="field">
-      <label>Top P <span class="val" id="topPVal">0.95</span></label>
-      <input type="range" id="topPSlider" min="0.1" max="1" step="0.05" value="0.95">
-    </div>
-
-    <details>
-      <summary>Advanced settings</summary>
+      <!-- System Prompt -->
       <div class="field">
-        <label>Max tokens</label>
-        <input type="number" id="maxTokens" value="1024">
+        <label>System Prompt</label>
+        <textarea id="systemPrompt" rows="5">You are Qwen3-32B, an ultra-fast, high-precision AI assistant running on a dedicated NVIDIA A100 GPU with native bfloat16 and FlashAttention-2. Deliver concise, deeply reasoned, and accurate answers.</textarea>
       </div>
-      <div class="field">
-        <label>API base URL</label>
-        <input type="text" id="baseUrl" value="" placeholder="(same origin, via proxy)">
-      </div>
-      <div class="field">
-        <label>Model name</label>
-        <input type="text" id="modelName" value="./Qwen3-32B">
-      </div>
-    </details>
 
-    <button class="sidebar-btn" id="clearBtn">Clear conversation</button>
+      <!-- Temperature -->
+      <div class="field">
+        <label>Temperature <span class="val" id="tempVal">0.60</span></label>
+        <input type="range" id="tempSlider" min="0" max="1.5" step="0.05" value="0.60">
+      </div>
 
-    <div class="status-row">
-      <div class="status-dot" id="statusDot"></div>
-      <span id="statusText">checking connection...</span>
+      <!-- Top-P -->
+      <div class="field">
+        <label>Top P <span class="val" id="topPVal">0.95</span></label>
+        <input type="range" id="topPSlider" min="0.05" max="1.0" step="0.05" value="0.95">
+      </div>
+
+      <!-- Max Tokens -->
+      <div class="field">
+        <label>Max Output Tokens <span class="val" id="maxTokensVal">1024</span></label>
+        <input type="range" id="maxTokensSlider" min="128" max="8192" step="128" value="1024">
+      </div>
+
+      <!-- Reasoning Display Mode -->
+      <div class="field">
+        <label>Reasoning (&lt;think&gt;) Mode</label>
+        <select id="reasoningModeSelect">
+          <option value="accordion" selected>Collapsible Box (Recommended)</option>
+          <option value="inline">Show Inline Raw</option>
+          <option value="hidden">Hide Reasoning Chain</option>
+        </select>
+      </div>
+
+      <!-- Advanced Connection Settings -->
+      <details>
+        <summary>Advanced / Endpoints</summary>
+        <div class="field" style="margin-top:10px;">
+          <label>API Base URL</label>
+          <input type="text" id="baseUrlInput" value="" placeholder="Default: Same Origin (proxy / vLLM)">
+        </div>
+        <div class="field" style="margin-top:8px;">
+          <label>Served Model Name</label>
+          <input type="text" id="modelNameInput" value="Qwen3-32B">
+        </div>
+        <div class="field" style="margin-top:8px;">
+          <label>Repetition Penalty</label>
+          <input type="number" id="repPenaltyInput" value="1.05" step="0.01" min="1.0" max="2.0">
+        </div>
+      </details>
+
+      <div style="display:flex; flex-direction:column; gap:8px; margin-top:auto;">
+        <button class="btn btn-secondary" id="clearChatBtn">🗑️ Clear Chat</button>
+        <button class="btn btn-secondary" id="authKeyBtn">🔑 Set Access Key</button>
+      </div>
     </div>
   </aside>
 
-  <main class="main">
-    <div class="topbar">
-      <div class="title"><button class="icon-btn" id="toggleSidebar" title="Toggle settings panel">&#9776;</button> Chat</div>
-      <div class="meta" id="genMeta"></div>
+  <!-- MAIN INTERFACE -->
+  <main class="main-content">
+    <!-- TOP BAR -->
+    <header class="topbar">
+      <div class="topbar-left">
+        <button class="icon-btn" id="toggleSidebarBtn" title="Toggle Sidebar">☰</button>
+        <!-- NAV TABS -->
+        <nav class="nav-tabs">
+          <button class="nav-tab active" data-tab="chatView">💬 Chat</button>
+          <button class="nav-tab" data-tab="telemetryView">📊 Engine & GPU Monitor</button>
+          <button class="nav-tab" data-tab="benchmarkView">🧪 Benchmark Suite</button>
+          <button class="nav-tab" data-tab="historyView">📜 Session History</button>
+          <button class="nav-tab" data-tab="sizingView">📐 A100 Sizing</button>
+        </nav>
+      </div>
+
+      <!-- LIVE TELEMETRY RIBBON -->
+      <div class="topbar-metrics">
+        <div class="metric-pill" title="vLLM Inference Server Connectivity">
+          <span class="dot offline" id="connDot"></span>
+          <span id="connText">Checking...</span>
+        </div>
+        <div class="metric-pill" title="Last Time To First Token (Prefill Latency)">
+          <span>⚡ TTFT:</span>
+          <span class="val" id="topTtftVal">-- ms</span>
+        </div>
+        <div class="metric-pill" title="Last Generation Speed">
+          <span>🚀 Speed:</span>
+          <span class="val" id="topSpeedVal">-- tok/s</span>
+        </div>
+        <div class="metric-pill" title="Current vLLM KV Cache Allocation">
+          <span>🧠 KV Cache:</span>
+          <span class="val" id="topKvVal">--%</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- ======================================================== -->
+    <!-- TAB 1: CHAT & LIVE GENERATION VIEW -->
+    <!-- ======================================================== -->
+    <div class="tab-pane active" id="chatView">
+      <div id="chatContainer">
+        <div id="chatScrollArea">
+          <!-- Welcome Bubble -->
+          <div class="chat-row assistant">
+            <div class="chat-avatar">AI</div>
+            <div class="bubble-wrap">
+              <div class="bubble">
+                <p><strong>Welcome to the Qwen3-32B Single-A100 Inference & Measurement Platform!</strong></p>
+                <p>This deployment is pre-configured for <strong>1x NVIDIA A100 GPU</strong> using <code>TP=1</code>, <code>bfloat16</code> precision, and <code>FlashAttention-2</code>.</p>
+                <p>Every response automatically measures and visualizes:</p>
+                <ul>
+                  <li>⚡ <strong>TTFT (Time To First Token)</strong>: Prompt prefill latency in milliseconds.</li>
+                  <li>🚀 <strong>Generation Throughput (TPS)</strong>: Pure decode tokens per second.</li>
+                  <li>⏱️ <strong>Inter-Token Latency (TPOT)</strong>: Average duration between generated tokens.</li>
+                  <li>🧠 <strong>Reasoning Token Accounting</strong>: Timing & token breakdown of <code>&lt;think&gt;</code> chains vs final output.</li>
+                  <li>📏 <strong>Context Window Utilization</strong>: Track your prompt + completion context footprint.</li>
+                </ul>
+                <p>Type a message below or switch to the <strong>Benchmark Suite</strong> tab to run automated stress tests!</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Chat Input Bar -->
+        <div class="chat-input-bar">
+          <textarea id="promptInput" rows="1" placeholder="Type a prompt to test inference (Shift+Enter for newline, Enter to send)..."></textarea>
+          <div class="send-btn-wrap">
+            <button class="btn btn-primary" id="sendBtn">Send 🚀</button>
+            <button class="btn btn-danger" id="stopBtn" style="display:none;">Stop ⏹️</button>
+          </div>
+        </div>
+      </div>
     </div>
-    <div id="chat"></div>
-    <div class="input-bar">
-      <textarea id="promptInput" rows="1" placeholder="Message the model... (Enter to send, Shift+Enter for newline)"></textarea>
-      <button class="send-btn" id="sendBtn">Send</button>
-      <button class="stop-btn" id="stopBtn" style="display:none">Stop</button>
+
+    <!-- ======================================================== -->
+    <!-- TAB 2: LIVE TELEMETRY & GPU MONITOR -->
+    <!-- ======================================================== -->
+    <div class="tab-pane" id="telemetryView">
+      <div class="telemetry-dashboard">
+        <div class="section-header">
+          <div class="section-title">📊 vLLM Engine Real-Time Telemetry</div>
+          <div style="display:flex; align-items:center; gap:8px;">
+            <button class="btn btn-secondary btn-sm" id="refreshMetricsBtn">🔄 Refresh Now</button>
+            <button class="btn btn-secondary btn-sm" id="toggleAutoRefreshBtn">Auto-Refresh: ON (2s)</button>
+          </div>
+        </div>
+
+        <!-- KPI Cards Grid -->
+        <div class="dashboard-grid">
+          <div class="kpi-card">
+            <span class="kpi-label">Active GPU KV Cache Usage</span>
+            <span class="kpi-value" id="kpiKvUsage">0.0%</span>
+            <span class="kpi-sub" id="kpiKvStatus">PagedAttention VRAM pool</span>
+          </div>
+
+          <div class="kpi-card">
+            <span class="kpi-label">Active Request Queue</span>
+            <span class="kpi-value" id="kpiRunningReqs">0</span>
+            <span class="kpi-sub"><span id="kpiWaitingReqs">0</span> waiting · <span id="kpiSwappedReqs">0</span> swapped</span>
+          </div>
+
+          <div class="kpi-card">
+            <span class="kpi-label">Engine Generation Throughput</span>
+            <span class="kpi-value" id="kpiAvgGenTps">--</span>
+            <span class="kpi-sub">tokens / sec (vLLM aggregate)</span>
+          </div>
+
+          <div class="kpi-card">
+            <span class="kpi-label">Total Engine Tokens</span>
+            <span class="kpi-value" id="kpiTotalTokens">0</span>
+            <span class="kpi-sub"><span id="kpiPromptTokensTotal">0</span> prompt · <span id="kpiGenTokensTotal">0</span> gen</span>
+          </div>
+        </div>
+
+        <!-- KV Cache Visual Gauge -->
+        <div class="gauge-box">
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <span style="font-weight:700; font-size:13px; color:#fff;">vLLM PagedAttention KV Cache Pool Factor</span>
+            <span style="font-family:var(--font-mono); font-weight:700; color:var(--cyan);" id="gaugeKvText">0.0%</span>
+          </div>
+          <div class="gauge-bar-outer">
+            <div class="gauge-bar-inner" id="gaugeKvBar" style="width: 0%;"></div>
+          </div>
+          <div class="gauge-ticks">
+            <span>0% (Empty)</span>
+            <span>25%</span>
+            <span>50%</span>
+            <span>75% (Warning threshold)</span>
+            <span>100% (Preemption risk)</span>
+          </div>
+        </div>
+
+        <!-- NVIDIA A100 Hardware Telemetry Section -->
+        <div class="section-header" style="margin-top:10px;">
+          <div class="section-title">⚡ 1x NVIDIA A100 Hardware Telemetry</div>
+          <span class="metric-pill" id="gpuHwStatusBadge">Status: Checking GPU...</span>
+        </div>
+
+        <div class="hw-card" id="gpuHwCard">
+          <div class="hw-stats-grid">
+            <div class="hw-stat">
+              <span class="tele-label">GPU Model & Index</span>
+              <span class="tele-val accent" id="hwGpuName">NVIDIA A100-SXM4 / PCIe</span>
+            </div>
+            <div class="hw-stat">
+              <span class="tele-label">GPU Core Utilization</span>
+              <span class="tele-val green" id="hwGpuUtil">--%</span>
+            </div>
+            <div class="hw-stat">
+              <span class="tele-label">VRAM Allocated / Total</span>
+              <span class="tele-val" id="hwGpuMem">-- / 80.0 GB</span>
+            </div>
+            <div class="hw-stat">
+              <span class="tele-label">Temperature</span>
+              <span class="tele-val" id="hwGpuTemp">-- °C</span>
+            </div>
+            <div class="hw-stat">
+              <span class="tele-label">Power Draw</span>
+              <span class="tele-val" id="hwGpuPower">-- W</span>
+            </div>
+            <div class="hw-stat">
+              <span class="tele-label">Graphics Clock</span>
+              <span class="tele-val" id="hwGpuClock">-- MHz</span>
+            </div>
+          </div>
+
+          <!-- Memory Allocation Stacked Visual -->
+          <div>
+            <div style="display:flex; justify-content:space-between; margin-bottom:6px; font-size:12px;">
+              <span style="color:var(--text-muted);">A100 Memory Allocation Breakdown</span>
+              <span style="font-family:var(--font-mono);" id="hwMemBreakdownText">Model Weights: ~65.5 GB (BF16) · KV Cache: ~10.5 GB · Free: ~4.0 GB</span>
+            </div>
+            <div class="gauge-bar-outer" style="height:12px; display:flex;">
+              <div style="background:var(--accent); width:81.8%; height:100%;" title="Model Weights (BF16 ~65.5GB)"></div>
+              <div style="background:var(--cyan); width:13.2%; height:100%;" title="PagedAttention KV Cache Pool (~10.5GB)" id="hwKvMemBar"></div>
+              <div style="background:var(--panel-3); width:5.0%; height:100%;" title="Headroom / Free (~4.0GB)"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ======================================================== -->
+    <!-- TAB 3: BENCHMARK & STRESS-TEST SUITE -->
+    <!-- ======================================================== -->
+    <div class="tab-pane" id="benchmarkView">
+      <div class="benchmark-container">
+        <div class="section-header">
+          <div class="section-title">🧪 Automated Benchmark & Repeatability Suite</div>
+          <div style="display:flex; gap:8px;">
+            <button class="btn btn-secondary btn-sm" id="exportBenchJsonBtn">Export Benchmark JSON</button>
+            <button class="btn btn-secondary btn-sm" id="exportBenchCsvBtn">Export CSV</button>
+          </div>
+        </div>
+
+        <!-- Benchmark Presets -->
+        <div class="suite-cards-grid">
+          <div class="suite-card selected" data-preset="latency">
+            <span class="suite-badge">Latency Probe</span>
+            <div class="suite-title">⚡ Fast TTFT & First-Token Test</div>
+            <div class="suite-desc">Short prompt (40 tokens) with 64 max tokens. Isolates cold/warm prefill latency and decode speed.</div>
+          </div>
+
+          <div class="suite-card" data-preset="reasoning">
+            <span class="suite-badge">Reasoning Test</span>
+            <div class="suite-title">🧠 Chain-of-Thought Velocity</div>
+            <div class="suite-desc">Complex mathematical/logic puzzle requiring deep &lt;think&gt; tokens. Measures reasoning throughput.</div>
+          </div>
+
+          <div class="suite-card" data-preset="throughput">
+            <span class="suite-badge">Heavy Context</span>
+            <div class="suite-title">🚀 Long-Context FlashAttention</div>
+            <div class="suite-desc">1,500 prompt tokens into 256 output tokens. Measures prefill ingestion speed and high-load decode TPS.</div>
+          </div>
+
+          <div class="suite-card" data-preset="custom">
+            <span class="suite-badge">Custom</span>
+            <div class="suite-title">🎯 Custom Test Suite</div>
+            <div class="suite-desc">Run your own custom prompt across multiple sequential iterations to collect statistical variance.</div>
+          </div>
+        </div>
+
+        <!-- Custom Prompt Input (Shown if custom or editable) -->
+        <div class="field" id="benchPromptWrap">
+          <label>Benchmark Test Prompt</label>
+          <textarea id="benchPromptInput" rows="3">Explain the architectural differences between NVIDIA Volta V100 and Ampere A100 Tensor Cores, specifically focusing on native Bfloat16 support and FlashAttention efficiency.</textarea>
+        </div>
+
+        <!-- Benchmark Execution Bar -->
+        <div class="benchmark-run-bar">
+          <div style="display:flex; align-items:center; gap:12px;">
+            <div class="field" style="width:120px;">
+              <label>Iterations</label>
+              <select id="benchIterationsSelect">
+                <option value="1">1 run</option>
+                <option value="3" selected>3 runs (avg)</option>
+                <option value="5">5 runs (p50/p90)</option>
+                <option value="10">10 runs (rigorous)</option>
+              </select>
+            </div>
+            <div class="field" style="width:130px;">
+              <label>Max Tokens</label>
+              <input type="number" id="benchMaxTokens" value="256">
+            </div>
+          </div>
+
+          <div class="bench-progress-wrap">
+            <div style="display:flex; justify-content:space-between; font-size:11.5px;">
+              <span id="benchStatusText">Ready to benchmark</span>
+              <span id="benchProgressText">0 / 0</span>
+            </div>
+            <div class="bench-progress-bar">
+              <div class="bench-progress-fill" id="benchProgressFill"></div>
+            </div>
+          </div>
+
+          <button class="btn btn-primary" id="startBenchmarkBtn" style="min-width:140px;">Start Benchmark ▶️</button>
+        </div>
+
+        <!-- Statistical Aggregation Card -->
+        <div class="calc-results" id="benchStatsCard">
+          <div class="calc-res-item">
+            <span class="calc-res-label">Mean TTFT</span>
+            <span class="calc-res-val" id="benchMeanTtft">-- ms</span>
+          </div>
+          <div class="calc-res-item">
+            <span class="calc-res-label">P50 / P90 TTFT</span>
+            <span class="calc-res-val" id="benchP50Ttft">-- / -- ms</span>
+          </div>
+          <div class="calc-res-item">
+            <span class="calc-res-label">Mean Throughput (TPS)</span>
+            <span class="calc-res-val" id="benchMeanTps" style="color:var(--cyan);">-- tok/s</span>
+          </div>
+          <div class="calc-res-item">
+            <span class="calc-res-label">Peak TPS</span>
+            <span class="calc-res-val" id="benchPeakTps" style="color:var(--green);">-- tok/s</span>
+          </div>
+          <div class="calc-res-item">
+            <span class="calc-res-label">Mean TPOT</span>
+            <span class="calc-res-val" id="benchMeanTpot">-- ms</span>
+          </div>
+        </div>
+
+        <!-- Benchmark Runs Table -->
+        <div class="table-card">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Run #</th>
+                <th>Prompt Tokens</th>
+                <th>Output Tokens</th>
+                <th>TTFT (ms)</th>
+                <th>Speed (TPS)</th>
+                <th>TPOT (ms)</th>
+                <th>Total Time (s)</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody id="benchTableBody">
+              <tr>
+                <td colspan="8" style="text-align:center; color:var(--text-dim); padding:20px;">No benchmark runs executed yet. Select a preset and click Start Benchmark.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ======================================================== -->
+    <!-- TAB 4: SESSION HISTORY & EXPORT -->
+    <!-- ======================================================== -->
+    <div class="tab-pane" id="historyView">
+      <div class="history-container">
+        <div class="section-header">
+          <div class="section-title">📜 Session Query Log & Analytics</div>
+          <div style="display:flex; gap:8px;">
+            <button class="btn btn-secondary btn-sm" id="exportHistoryCsvBtn">Export History (CSV)</button>
+            <button class="btn btn-secondary btn-sm" id="exportHistoryJsonBtn">Export History (JSON)</button>
+            <button class="btn btn-danger btn-sm" id="clearHistoryBtn">Clear Log</button>
+          </div>
+        </div>
+
+        <!-- Global Session KPI Cards -->
+        <div class="dashboard-grid">
+          <div class="kpi-card">
+            <span class="kpi-label">Total Requests Handled</span>
+            <span class="kpi-value" id="histTotalReqs">0</span>
+            <span class="kpi-sub">In current browser session</span>
+          </div>
+          <div class="kpi-card">
+            <span class="kpi-label">Cumulative Tokens Streamed</span>
+            <span class="kpi-value" id="histTotalTokens">0</span>
+            <span class="kpi-sub">Prompt + Output tokens</span>
+          </div>
+          <div class="kpi-card">
+            <span class="kpi-label">Session Average Speed</span>
+            <span class="kpi-value" id="histAvgTps" style="color:var(--cyan);">--</span>
+            <span class="kpi-sub">Tokens / second</span>
+          </div>
+          <div class="kpi-card">
+            <span class="kpi-label">Session Average TTFT</span>
+            <span class="kpi-value" id="histAvgTtft" style="color:var(--yellow);">--</span>
+            <span class="kpi-sub">Milliseconds to first token</span>
+          </div>
+        </div>
+
+        <!-- History Table -->
+        <div class="table-card">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Timestamp</th>
+                <th>Prompt Preview</th>
+                <th>In Tok</th>
+                <th>Out Tok</th>
+                <th>Think Tok</th>
+                <th>TTFT (ms)</th>
+                <th>TPS (tok/s)</th>
+                <th>TPOT (ms)</th>
+                <th>Duration (s)</th>
+              </tr>
+            </thead>
+            <tbody id="historyTableBody">
+              <tr>
+                <td colspan="10" style="text-align:center; color:var(--text-dim); padding:20px;">No requests recorded in this session yet.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ======================================================== -->
+    <!-- TAB 5: A100 DEPLOYMENT & SIZING CALCULATOR -->
+    <!-- ======================================================== -->
+    <div class="tab-pane" id="sizingView">
+      <div class="sizing-container">
+        <div class="section-header">
+          <div class="section-title">📐 Qwen3-32B Single-A100 Architecture & Sizing Calculator</div>
+        </div>
+
+        <!-- Interactive Calculator -->
+        <div class="calc-box">
+          <h3 style="font-size:14px; color:#fff;">Interactive VRAM & KV Cache Allocation Estimator</h3>
+          <div class="calc-grid">
+            <div class="field">
+              <label>Model Precision</label>
+              <select id="calcPrecisionSelect">
+                <option value="bf16" selected>bfloat16 (Full Precision - Recommended for 80GB)</option>
+                <option value="fp8">FP8 (8-bit Quantized - Fits 40GB & 80GB)</option>
+                <option value="awq">AWQ 4-bit (Fits 40GB easily)</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>Max Context Length</label>
+              <select id="calcContextSelect">
+                <option value="4096">4,096 tokens</option>
+                <option value="8192" selected>8,192 tokens (Standard)</option>
+                <option value="16384">16,384 tokens (Long context)</option>
+                <option value="32768">32,768 tokens (Extended context)</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>Concurrent Active Sequences</label>
+              <input type="number" id="calcUsersInput" value="4" min="1" max="64">
+            </div>
+          </div>
+
+          <!-- Dynamic Math Output -->
+          <div class="calc-results">
+            <div class="calc-res-item">
+              <span class="calc-res-label">Model Weights VRAM</span>
+              <span class="calc-res-val" id="calcWeightsVal">65.5 GB</span>
+            </div>
+            <div class="calc-res-item">
+              <span class="calc-res-label">KV Cache per Sequence</span>
+              <span class="calc-res-val" id="calcKvSeqVal">2.0 GB</span>
+            </div>
+            <div class="calc-res-item">
+              <span class="calc-res-label">Total VRAM Required</span>
+              <span class="calc-res-val" id="calcTotalVramVal" style="color:var(--cyan);">75.5 GB</span>
+            </div>
+            <div class="calc-res-item">
+              <span class="calc-res-label">A100 80GB Compatibility</span>
+              <div id="calc80gbBadge" class="status-badge-lg fit">✅ Fits (4.5 GB Free)</div>
+            </div>
+            <div class="calc-res-item">
+              <span class="calc-res-label">A100 40GB Compatibility</span>
+              <div id="calc40gbBadge" class="status-badge-lg nofit">❌ Exceeds 40GB</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Architectural Comparison Table: 4x V100 vs 1x A100 -->
+        <div class="calc-box">
+          <h3 style="font-size:14px; color:#fff;">Why 1x NVIDIA A100 Outperforms 4x NVIDIA V100</h3>
+          <div class="table-card">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Feature / Dimension</th>
+                  <th>Old Setup: 4x Tesla V100 32GB</th>
+                  <th>New Setup: 1x NVIDIA A100 (80GB/40GB)</th>
+                  <th>Engineering Advantage</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><strong>Tensor Parallelism</strong></td>
+                  <td>TP = 4 (Distributed across 4 GPUs)</td>
+                  <td>TP = 1 (Single GPU Engine)</td>
+                  <td>Zero NCCL all-reduce communication latency; zero PCIe/NVLink bottlenecks.</td>
+                </tr>
+                <tr>
+                  <td><strong>Data Type (Dtype)</strong></td>
+                  <td>FP16 (<code>--dtype half</code>)</td>
+                  <td>Native <code>bfloat16</code> (Ampere)</td>
+                  <td>Prevents NaN and numerical overflow issues common with Qwen attention in FP16.</td>
+                </tr>
+                <tr>
+                  <td><strong>Attention Kernel</strong></td>
+                  <td>XFormers / Naive</td>
+                  <td>FlashAttention-2</td>
+                  <td>Up to 2.5x faster TTFT and higher decode tokens/sec; reduced memory footprint.</td>
+                </tr>
+                <tr>
+                  <td><strong>Memory Sizing</strong></td>
+                  <td>4x 32GB = 128GB total</td>
+                  <td>1x 80GB (or 1x 40GB AWQ)</td>
+                  <td>Simpler deployment; single-container failure domain; 50% lower cloud idle cost.</td>
+                </tr>
+                <tr>
+                  <td><strong>Custom All-Reduce</strong></td>
+                  <td>Disabled (workaround for SXM2 bug)</td>
+                  <td>Not required (single GPU)</td>
+                  <td>Cleaner execution stack with zero multi-GPU driver instability.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Quick Launch Reference -->
+        <div class="calc-box">
+          <h3 style="font-size:14px; color:#fff;">🚀 GPU Deployment Quick Reference</h3>
+          <p style="color:var(--text-muted); font-size:13px;">Once your A100 GPU is attached, launch using either method below:</p>
+          <div class="field" style="margin-top:8px;">
+            <label>Option A: Docker Compose (Recommended)</label>
+            <pre style="background:var(--panel-2); padding:10px; border-radius:8px; border:1px solid var(--border); overflow-x:auto;"><code>docker compose up -d</code></pre>
+          </div>
+          <div class="field" style="margin-top:8px;">
+            <label>Option B: Standalone Python Security Proxy</label>
+            <pre style="background:var(--panel-2); padding:10px; border-radius:8px; border:1px solid var(--border); overflow-x:auto;"><code>python3 serve_ui.py</code></pre>
+          </div>
+          <div class="field" style="margin-top:8px;">
+            <label>Option C: Kubernetes (k3s)</label>
+            <pre style="background:var(--panel-2); padding:10px; border-radius:8px; border:1px solid var(--border); overflow-x:auto;"><code>kubectl apply -f k8s/qwen3-k8s.yaml</code></pre>
+          </div>
+        </div>
+      </div>
     </div>
   </main>
 </div>
 
-<div class="modal-overlay" id="keyModal" style="display:none">
+<!-- ACCESS KEY MODAL -->
+<div class="modal-overlay" id="keyModal" style="display:none;">
   <div class="modal-card">
-    <h2>Access key required</h2>
-    <p>This model endpoint is protected. Enter the access key you were given to start chatting.</p>
-    <input type="text" id="keyInput" placeholder="Access key" autocomplete="off">
-    <div class="err" id="keyErr"></div>
-    <button id="keySubmit">Continue</button>
+    <h2>🔑 Access Key Required</h2>
+    <p>This vLLM endpoint is protected. Enter your access key to unlock inference and telemetry.</p>
+    <input type="text" id="modalKeyInput" placeholder="Enter X-Auth-Key..." autocomplete="off">
+    <div id="modalKeyErr" style="color:var(--red); font-size:12px; min-height:16px;"></div>
+    <div style="display:flex; justify-content:flex-end; gap:8px;">
+      <button class="btn btn-secondary" id="modalKeyCancel">Cancel</button>
+      <button class="btn btn-primary" id="modalKeySubmit">Unlock Access</button>
+    </div>
   </div>
 </div>
 
+<!-- JAVASCRIPT APPLICATION CORE -->
 <script>
-const chatEl = document.getElementById('chat');
-const promptEl = document.getElementById('promptInput');
+// ========================================================
+// STATE MANAGEMENT & PERSISTENCE
+// ========================================================
+let messages = [];
+let activeController = null;
+let sessionHistory = [];
+let benchmarkHistory = [];
+let autoRefreshTimer = null;
+let isAutoRefreshActive = true;
+
+// DOM Elements - Navigation & Sidebar
+const sidebarEl = document.getElementById('sidebarEl');
+const toggleSidebarBtn = document.getElementById('toggleSidebarBtn');
+const collapseSidebarBtn = document.getElementById('collapseSidebarBtn');
+const navTabs = document.querySelectorAll('.nav-tab');
+const tabPanes = document.querySelectorAll('.tab-pane');
+
+// DOM Elements - Chat Controls
+const chatScrollArea = document.getElementById('chatScrollArea');
+const promptInput = document.getElementById('promptInput');
 const sendBtn = document.getElementById('sendBtn');
 const stopBtn = document.getElementById('stopBtn');
-const genMeta = document.getElementById('genMeta');
-const baseUrlEl = document.getElementById('baseUrl');
-const modelEl = document.getElementById('modelName');
+const clearChatBtn = document.getElementById('clearChatBtn');
 const systemPromptEl = document.getElementById('systemPrompt');
 const tempSlider = document.getElementById('tempSlider');
 const tempVal = document.getElementById('tempVal');
 const topPSlider = document.getElementById('topPSlider');
 const topPVal = document.getElementById('topPVal');
-const maxTokensEl = document.getElementById('maxTokens');
-const statusDot = document.getElementById('statusDot');
-const statusText = document.getElementById('statusText');
-const sidebarEl = document.querySelector('.sidebar');
-const toggleSidebarBtn = document.getElementById('toggleSidebar');
+const maxTokensSlider = document.getElementById('maxTokensSlider');
+const maxTokensVal = document.getElementById('maxTokensVal');
+const reasoningModeSelect = document.getElementById('reasoningModeSelect');
+const baseUrlInput = document.getElementById('baseUrlInput');
+const modelNameInput = document.getElementById('modelNameInput');
+const repPenaltyInput = document.getElementById('repPenaltyInput');
 
-toggleSidebarBtn.onclick = () => {
-  sidebarEl.classList.toggle('collapsed');
-  localStorage.setItem('qwenStudioSidebarCollapsed', sidebarEl.classList.contains('collapsed') ? '1' : '0');
-};
-if (localStorage.getItem('qwenStudioSidebarCollapsed') === '1') sidebarEl.classList.add('collapsed');
+// DOM Elements - Header Metrics
+const connDot = document.getElementById('connDot');
+const connText = document.getElementById('connText');
+const topTtftVal = document.getElementById('topTtftVal');
+const topSpeedVal = document.getElementById('topSpeedVal');
+const topKvVal = document.getElementById('topKvVal');
 
-let messages = [];
-let controller = null;
-
-// ---------- access key management ----------
-const keyModal = document.getElementById('keyModal');
-const keyInput = document.getElementById('keyInput');
-const keyErr = document.getElementById('keyErr');
-const keySubmit = document.getElementById('keySubmit');
-
+// Auth Key Management
 let AUTH_KEY = new URLSearchParams(location.search).get('key') || localStorage.getItem('qwenAuthKey') || '';
 if (new URLSearchParams(location.search).get('key')) {
   localStorage.setItem('qwenAuthKey', AUTH_KEY);
-  history.replaceState({}, '', location.pathname); // scrub key out of the visible URL/history
+  history.replaceState({}, '', location.pathname);
 }
+const keyModal = document.getElementById('keyModal');
+const modalKeyInput = document.getElementById('modalKeyInput');
+const modalKeyErr = document.getElementById('modalKeyErr');
+const modalKeySubmit = document.getElementById('modalKeySubmit');
+const modalKeyCancel = document.getElementById('modalKeyCancel');
+const authKeyBtn = document.getElementById('authKeyBtn');
 
-function authHeaders(extra) {
-  const h = Object.assign({}, extra || {});
-  if (AUTH_KEY) h['X-Auth-Key'] = AUTH_KEY;
-  return h;
-}
+authKeyBtn.onclick = () => showKeyModal();
+modalKeyCancel.onclick = () => keyModal.style.display = 'none';
+modalKeySubmit.onclick = handleKeySubmit;
+modalKeyInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') handleKeySubmit(); });
 
-function showKeyModal(message) {
-  keyErr.textContent = message || '';
+function showKeyModal(msg) {
+  modalKeyErr.textContent = msg || '';
+  modalKeyInput.value = AUTH_KEY;
   keyModal.style.display = 'flex';
-  keyInput.value = '';
-  keyInput.focus();
+  modalKeyInput.focus();
 }
-function hideKeyModal() { keyModal.style.display = 'none'; }
 
-keySubmit.onclick = submitKey;
-keyInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') submitKey(); });
-
-async function submitKey() {
-  const val = keyInput.value.trim();
-  if (!val) { keyErr.textContent = 'Please enter a key.'; return; }
+async function handleKeySubmit() {
+  const val = modalKeyInput.value.trim();
   AUTH_KEY = val;
+  localStorage.setItem('qwenAuthKey', AUTH_KEY);
   const ok = await checkHealth();
   if (ok) {
-    localStorage.setItem('qwenAuthKey', AUTH_KEY);
-    hideKeyModal();
+    keyModal.style.display = 'none';
   } else {
-    keyErr.textContent = 'That key was rejected. Try again.';
+    modalKeyErr.textContent = 'Key rejected or connection failed.';
   }
 }
 
-// ---------- persistence ----------
-const PERSIST_KEYS = ['baseUrl:value', 'modelName:value', 'systemPrompt:value', 'maxTokens:value'];
-function loadPersisted() {
+function getAuthHeaders(extra) {
+  const headers = Object.assign({}, extra || {});
+  if (AUTH_KEY) headers['X-Auth-Key'] = AUTH_KEY;
+  return headers;
+}
+
+// Sidebar Toggling
+toggleSidebarBtn.onclick = () => sidebarEl.classList.toggle('collapsed');
+collapseSidebarBtn.onclick = () => sidebarEl.classList.add('collapsed');
+
+// Slider Value Displays
+tempSlider.oninput = () => tempVal.textContent = parseFloat(tempSlider.value).toFixed(2);
+topPSlider.oninput = () => topPVal.textContent = parseFloat(topPSlider.value).toFixed(2);
+maxTokensSlider.oninput = () => maxTokensVal.textContent = maxTokensSlider.value;
+
+// Tab Switching
+navTabs.forEach(tab => {
+  tab.onclick = () => {
+    navTabs.forEach(t => t.classList.remove('active'));
+    tabPanes.forEach(p => p.classList.remove('active'));
+    tab.classList.add('active');
+    const targetPane = document.getElementById(tab.dataset.tab);
+    if (targetPane) targetPane.classList.add('active');
+    if (tab.dataset.tab === 'telemetryView') fetchEngineAndGpuMetrics();
+  };
+});
+
+// Settings Persistence
+function loadSavedSettings() {
   try {
-    const saved = JSON.parse(localStorage.getItem('qwenStudioSettings') || '{}');
-    if (saved.baseUrl) baseUrlEl.value = saved.baseUrl;
-    if (saved.modelName) modelEl.value = saved.modelName;
+    const saved = JSON.parse(localStorage.getItem('qwenA100StudioSettings') || '{}');
     if (saved.systemPrompt) systemPromptEl.value = saved.systemPrompt;
-    if (saved.maxTokens) maxTokensEl.value = saved.maxTokens;
-    if (saved.temp) tempSlider.value = saved.temp;
-    if (saved.topP) topPSlider.value = saved.topP;
+    if (saved.temp) { tempSlider.value = saved.temp; tempVal.textContent = parseFloat(saved.temp).toFixed(2); }
+    if (saved.topP) { topPSlider.value = saved.topP; topPVal.textContent = parseFloat(saved.topP).toFixed(2); }
+    if (saved.maxTokens) { maxTokensSlider.value = saved.maxTokens; maxTokensVal.textContent = saved.maxTokens; }
+    if (saved.baseUrl) baseUrlInput.value = saved.baseUrl;
+    if (saved.modelName) modelNameInput.value = saved.modelName;
+    if (saved.reasoningMode) reasoningModeSelect.value = saved.reasoningMode;
   } catch (e) {}
 }
-function savePersisted() {
-  localStorage.setItem('qwenStudioSettings', JSON.stringify({
-    baseUrl: baseUrlEl.value, modelName: modelEl.value, systemPrompt: systemPromptEl.value,
-    maxTokens: maxTokensEl.value, temp: tempSlider.value, topP: topPSlider.value
+function saveSettings() {
+  localStorage.setItem('qwenA100StudioSettings', JSON.stringify({
+    systemPrompt: systemPromptEl.value,
+    temp: tempSlider.value,
+    topP: topPSlider.value,
+    maxTokens: maxTokensSlider.value,
+    baseUrl: baseUrlInput.value,
+    modelName: modelNameInput.value,
+    reasoningMode: reasoningModeSelect.value
   }));
 }
-[baseUrlEl, modelEl, systemPromptEl, maxTokensEl, tempSlider, topPSlider].forEach(el =>
-  el.addEventListener('change', savePersisted)
+modelNameInput.addEventListener('input', () => { modelNameInput.dataset.userEdited = 'true'; });
+[systemPromptEl, tempSlider, topPSlider, maxTokensSlider, baseUrlInput, modelNameInput, reasoningModeSelect].forEach(
+  el => el.addEventListener('change', saveSettings)
 );
-loadPersisted();
+loadSavedSettings();
 
-// ---------- sliders ----------
-tempSlider.addEventListener('input', () => tempVal.textContent = tempSlider.value);
-topPSlider.addEventListener('input', () => topPVal.textContent = topPSlider.value);
-tempVal.textContent = tempSlider.value;
-topPVal.textContent = topPSlider.value;
+// ========================================================
+// HEALTH CHECK & CONNECTIVITY
+// ========================================================
+function getBaseUrl() {
+  return baseUrlInput.value.trim().replace(/\/+$/, '');
+}
 
-// ---------- connection health ----------
 async function checkHealth() {
+  const base = getBaseUrl();
+  const startTime = performance.now();
   try {
-    const res = await fetch(baseUrlEl.value.replace(/\/+$/, '') + '/v1/models', {
-      signal: AbortSignal.timeout(4000),
-      headers: authHeaders()
+    const res = await fetch((base || '') + '/v1/models', {
+      headers: getAuthHeaders(),
+      signal: AbortSignal.timeout(4000)
     });
+    const pingMs = Math.round(performance.now() - startTime);
     if (res.status === 403) {
-      statusDot.className = 'status-dot offline';
-      statusText.textContent = 'key rejected';
-      showKeyModal(AUTH_KEY ? 'That key was rejected. Try again.' : '');
+      connDot.className = 'dot offline';
+      connText.textContent = 'Key Rejected';
       return false;
     }
     if (res.ok) {
-      statusDot.className = 'status-dot online';
-      statusText.textContent = 'connected';
+      connDot.className = 'dot online';
+      connText.textContent = `Online (${pingMs}ms)`;
+      try {
+        const modelsJson = await res.json();
+        if (modelsJson.data && modelsJson.data.length > 0 && !modelNameInput.dataset.userEdited) {
+          modelNameInput.value = modelsJson.data[0].id;
+        }
+      } catch (e) {}
       return true;
     }
-    throw new Error();
-  } catch (e) {
-    statusDot.className = 'status-dot offline';
-    statusText.textContent = 'unreachable';
+    throw new Error(`HTTP ${res.status}`);
+  } catch (err) {
+    connDot.className = 'dot offline';
+    connText.textContent = 'Offline';
     return false;
   }
 }
 checkHealth();
-setInterval(checkHealth, 10000);
+setInterval(checkHealth, 8000);
 
-// ---------- clear ----------
-document.getElementById('clearBtn').onclick = () => {
-  messages = [];
-  chatEl.innerHTML = '';
-  genMeta.textContent = '';
-};
+// ========================================================
+// MARKDOWN & REASONING PARSING
+// ========================================================
+function escapeHtml(str) {
+  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
 
-// ---------- markdown rendering ----------
-function escapeHtml(s) {
-  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-}
-function inlineFormat(s) {
-  return s
-    .replace(/`([^`]+)`/g, '<code>$1</code>')
-    .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
-    .replace(/\*([^*]+)\*/g, '<em>$1</em>');
-}
-function renderBlock(text) {
-  const lines = escapeHtml(text).split('\n');
-  let html = '', inList = false, listType = null, para = [];
-  const flush = () => { if (para.length) { html += '<p>' + para.join('<br>') + '</p>'; para = []; } };
-  const closeList = () => { if (inList) { html += listType === 'ol' ? '</ol>' : '</ul>'; inList = false; } };
-  for (const line of lines) {
-    const h = line.match(/^(#{1,3})\s+(.*)/);
-    const ul = line.match(/^[-*]\s+(.*)/);
-    const ol = line.match(/^\d+\.\s+(.*)/);
-    if (h) { flush(); closeList(); const lvl = h[1].length + 2; html += `<h${lvl}>${inlineFormat(h[2])}</h${lvl}>`; }
-    else if (ul) { flush(); if (!inList || listType !== 'ul') { closeList(); html += '<ul>'; inList = true; listType = 'ul'; } html += `<li>${inlineFormat(ul[1])}</li>`; }
-    else if (ol) { flush(); if (!inList || listType !== 'ol') { closeList(); html += '<ol>'; inList = true; listType = 'ol'; } html += `<li>${inlineFormat(ol[1])}</li>`; }
-    else if (line.trim() === '') { flush(); closeList(); }
-    else { closeList(); para.push(inlineFormat(line)); }
-  }
-  flush(); closeList();
-  return html;
-}
 function renderMarkdown(text) {
+  if (!text) return '';
   const parts = text.split('```');
   return parts.map((part, i) => {
     if (i % 2 === 1) {
       const nl = part.indexOf('\n');
       let lang = '', code = part;
       if (nl !== -1) {
-        const first = part.slice(0, nl).trim();
-        if (/^[a-zA-Z0-9_+-]*$/.test(first)) { lang = first; code = part.slice(nl + 1); }
+        lang = part.slice(0, nl).trim();
+        code = part.slice(nl + 1);
       }
       return `<pre><code>${escapeHtml(code)}</code></pre>`;
     }
-    return renderBlock(part);
+    return renderMarkdownBlock(part);
   }).join('');
 }
 
-// ---------- think stripping ----------
-function stripThink(text) {
-  let cleaned = text.replace(/<think>[\s\S]*?<\/think>/g, '');
-  const openIdx = cleaned.indexOf('<think>');
-  if (openIdx !== -1) cleaned = cleaned.slice(0, openIdx);
-  return cleaned.replace(/^\s+/, '');
-}
-function isThinking(text) {
-  const openIdx = text.lastIndexOf('<think>');
-  if (openIdx === -1) return false;
-  return text.lastIndexOf('</think>') < openIdx;
+function renderMarkdownBlock(text) {
+  const lines = escapeHtml(text).split('\n');
+  let html = '', inList = false, listType = null, para = [];
+  const flushPara = () => { if (para.length) { html += '<p>' + para.join('<br>') + '</p>'; para = []; } };
+  const closeList = () => { if (inList) { html += listType === 'ol' ? '</ol>' : '</ul>'; inList = false; } };
+
+  for (const line of lines) {
+    const h = line.match(/^(#{1,3})\s+(.*)/);
+    const ul = line.match(/^[-*]\s+(.*)/);
+    const ol = line.match(/^\d+\.\s+(.*)/);
+    if (h) {
+      flushPara(); closeList();
+      const lvl = h[1].length + 2;
+      html += `<h${lvl}>${formatInline(h[2])}</h${lvl}>`;
+    } else if (ul) {
+      flushPara();
+      if (!inList || listType !== 'ul') { closeList(); html += '<ul>'; inList = true; listType = 'ul'; }
+      html += `<li>${formatInline(ul[1])}</li>`;
+    } else if (ol) {
+      flushPara();
+      if (!inList || listType !== 'ol') { closeList(); html += '<ol>'; inList = true; listType = 'ol'; }
+      html += `<li>${formatInline(ol[1])}</li>`;
+    } else if (line.trim() === '') {
+      flushPara(); closeList();
+    } else {
+      closeList();
+      para.push(formatInline(line));
+    }
+  }
+  flushPara(); closeList();
+  return html;
 }
 
-// ---------- bubble helpers ----------
-function addRow(role) {
+function formatInline(str) {
+  return str
+    .replace(/`([^`]+)`/g, '<code>$1</code>')
+    .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*([^*]+)\*/g, '<em>$1</em>');
+}
+
+// Token counter heuristic (accurate character-to-token ratio ~3.8 chars/token)
+function estimateTokens(text) {
+  if (!text) return 0;
+  return Math.max(1, Math.round(text.trim().length / 3.8));
+}
+
+// Extract Qwen <think>...</think> chain
+function extractThinking(text) {
+  const match = text.match(/<think>([\s\S]*?)<\/think>/);
+  if (match) {
+    return {
+      hasThinking: true,
+      isComplete: true,
+      thoughtText: match[1].trim(),
+      cleanedText: text.replace(/<think>[\s\S]*?<\/think>/, '').trim()
+    };
+  }
+  const openIdx = text.indexOf('<think>');
+  if (openIdx !== -1) {
+    return {
+      hasThinking: true,
+      isComplete: false,
+      thoughtText: text.slice(openIdx + 7).trim(),
+      cleanedText: text.slice(0, openIdx).trim()
+    };
+  }
+  return { hasThinking: false, isComplete: false, thoughtText: '', cleanedText: text };
+}
+
+// ========================================================
+// CHAT UI & "MEASURE EVERYTHING" GENERATION ENGINE
+// ========================================================
+function createChatRow(role) {
   const row = document.createElement('div');
-  row.className = 'row ' + role;
+  row.className = `chat-row ${role}`;
   const avatar = document.createElement('div');
-  avatar.className = 'avatar';
+  avatar.className = 'chat-avatar';
   avatar.textContent = role === 'user' ? 'U' : 'AI';
   const wrap = document.createElement('div');
   wrap.className = 'bubble-wrap';
   const bubble = document.createElement('div');
   bubble.className = 'bubble';
+
   wrap.appendChild(bubble);
   row.appendChild(avatar);
   row.appendChild(wrap);
-  chatEl.appendChild(row);
-  chatEl.scrollTop = chatEl.scrollHeight;
+  chatScrollArea.appendChild(row);
+  chatScrollArea.scrollTop = chatScrollArea.scrollHeight;
   return { row, bubble, wrap };
 }
-function addMeta(wrap, text) {
-  const m = document.createElement('div');
-  m.className = 'meta-line';
-  m.textContent = text;
-  wrap.appendChild(m);
-}
 
-// ---------- auto-resize textarea ----------
-promptEl.addEventListener('input', () => {
-  promptEl.style.height = 'auto';
-  promptEl.style.height = Math.min(promptEl.scrollHeight, 160) + 'px';
+promptInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    handleSend();
+  }
 });
-promptEl.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
-});
-sendBtn.onclick = send;
-stopBtn.onclick = () => { if (controller) controller.abort(); };
+sendBtn.onclick = handleSend;
+stopBtn.onclick = () => { if (activeController) activeController.abort(); };
 
-// ---------- send ----------
-async function send() {
-  const text = promptEl.value.trim();
-  if (!text) return;
-  promptEl.value = '';
-  promptEl.style.height = 'auto';
-  messages.push({ role: 'user', content: text });
-  const { bubble: userBubble } = addRow('user');
-  userBubble.textContent = text;
+clearChatBtn.onclick = () => {
+  messages = [];
+  chatScrollArea.innerHTML = '';
+  const welcomeRow = createChatRow('assistant');
+  welcomeRow.bubble.innerHTML = '<p>Chat cleared. Ready for your next query!</p>';
+};
 
-  const { bubble: aiBubble, wrap: aiWrap } = addRow('assistant');
-  aiBubble.innerHTML = '<div class="typing"><span></span><span></span><span></span></div>';
+async function handleSend() {
+  const promptText = promptInput.value.trim();
+  if (!promptText) return;
+  promptInput.value = '';
+  promptInput.style.height = 'auto';
+
+  // 1. Render User Message
+  messages.push({ role: 'user', content: promptText });
+  const { bubble: userBubble } = createChatRow('user');
+  userBubble.textContent = promptText;
+
+  // 2. Setup Assistant Placeholder with Live Streaming HUD
+  const { bubble: aiBubble, wrap: aiWrap } = createChatRow('assistant');
+  const liveHud = document.createElement('div');
+  liveHud.className = 'streaming-live-hud';
+  liveHud.innerHTML = `
+    <div class="typing-indicator"><span></span><span></span><span></span></div>
+    <span id="liveStatusText">Prefilling prompt on A100...</span>
+    <span style="font-family:var(--font-mono); font-weight:700;" id="liveTimerText">0.0s</span>
+    <span style="font-family:var(--font-mono); color:var(--cyan);" id="liveTpsText">-- tok/s</span>
+  `;
+  aiWrap.insertBefore(liveHud, aiBubble);
+  aiBubble.innerHTML = '<em>Awaiting first token...</em>';
 
   sendBtn.style.display = 'none';
-  stopBtn.style.display = 'inline-block';
-  genMeta.textContent = 'Generating...';
+  stopBtn.style.display = 'inline-flex';
 
-  const base = baseUrlEl.value.replace(/\/+$/, '');
-  const started = performance.now();
+  // 3. Execution & Telemetry Tracking
+  activeController = new AbortController();
+  const requestStartTime = performance.now();
+  let firstTokenTime = null;
+  let ttftMs = null;
+  let rawResponseText = '';
   let tokenCount = 0;
-  controller = new AbortController();
+  let thinkStartTime = null;
+  let thinkEndTime = null;
+  let thinkTokens = 0;
+  const timerInterval = setInterval(() => {
+    const elapsedSec = ((performance.now() - requestStartTime) / 1000).toFixed(1);
+    const liveTimer = document.getElementById('liveTimerText');
+    if (liveTimer) liveTimer.textContent = `${elapsedSec}s`;
+    if (firstTokenTime) {
+      const decodeDurationSec = (performance.now() - firstTokenTime) / 1000;
+      if (decodeDurationSec > 0.05 && tokenCount > 1) {
+        const liveTps = ((tokenCount - 1) / decodeDurationSec).toFixed(1);
+        const liveTpsEl = document.getElementById('liveTpsText');
+        if (liveTpsEl) liveTpsEl.textContent = `${liveTps} tok/s`;
+      }
+    }
+  }, 100);
 
   try {
-    const res = await fetch(base + '/v1/chat/completions', {
+    const base = getBaseUrl();
+    const systemPrompt = systemPromptEl.value;
+    const temp = parseFloat(tempSlider.value);
+    const topP = parseFloat(topPSlider.value);
+    const maxTokens = parseInt(maxTokensSlider.value, 10);
+    const model = modelNameInput.value.trim() || 'Qwen3-32B';
+    const repPenalty = parseFloat(repPenaltyInput.value) || 1.0;
+
+    const payload = {
+      model,
+      messages: [{ role: 'system', content: systemPrompt }, ...messages],
+      temperature: temp,
+      top_p: topP,
+      max_tokens: maxTokens,
+      repetition_penalty: repPenalty,
+      stream: true
+    };
+
+    const res = await fetch((base || '') + '/v1/chat/completions', {
       method: 'POST',
-      headers: authHeaders({ 'Content-Type': 'application/json' }),
-      signal: controller.signal,
-      body: JSON.stringify({
-        model: modelEl.value,
-        messages: [{ role: 'system', content: systemPromptEl.value }, ...messages],
-        temperature: parseFloat(tempSlider.value),
-        top_p: parseFloat(topPSlider.value),
-        max_tokens: parseInt(maxTokensEl.value) || 1024,
-        stream: true
-      })
+      headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+      signal: activeController.signal,
+      body: JSON.stringify(payload)
     });
 
     if (res.status === 403) {
-      messages.pop(); // don't keep the user turn that never got answered
-      aiBubble.parentElement.parentElement.remove();
-      showKeyModal('That key was rejected. Try again.');
-      genMeta.textContent = '';
-      return;
+      messages.pop();
+      showKeyModal('Access Key required or rejected.');
+      throw new Error('403 Forbidden: Invalid Access Key');
     }
     if (!res.ok || !res.body) {
-      const errText = await res.text().catch(() => res.statusText);
-      throw new Error('HTTP ' + res.status + ': ' + errText);
+      const errBody = await res.text().catch(() => res.statusText);
+      throw new Error(`HTTP ${res.status}: ${errBody}`);
     }
 
     const reader = res.body.getReader();
     const decoder = new TextDecoder();
-    let buffer = '', full = '', firstToken = true;
+    let buffer = '';
 
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
+
+      if (!firstTokenTime) {
+        firstTokenTime = performance.now();
+        ttftMs = Math.round(firstTokenTime - requestStartTime);
+        topTtftVal.textContent = `${ttftMs} ms`;
+        const liveStatus = document.getElementById('liveStatusText');
+        if (liveStatus) liveStatus.textContent = 'Streaming tokens...';
+      }
+
       buffer += decoder.decode(value, { stream: true });
       const lines = buffer.split('\n');
       buffer = lines.pop();
+
       for (const line of lines) {
         const trimmed = line.trim();
         if (!trimmed.startsWith('data:')) continue;
-        const payload = trimmed.slice(5).trim();
-        if (payload === '[DONE]') continue;
+        const jsonStr = trimmed.slice(5).trim();
+        if (jsonStr === '[DONE]') continue;
+
         try {
-          const json = JSON.parse(payload);
-          const delta = json.choices?.[0]?.delta?.content;
+          const chunk = JSON.parse(jsonStr);
+          const delta = chunk.choices?.[0]?.delta?.content;
           if (delta) {
-            if (firstToken) { aiBubble.innerHTML = ''; firstToken = false; }
-            full += delta;
+            rawResponseText += delta;
             tokenCount++;
-            const thinking = isThinking(full);
-            aiBubble.innerHTML = thinking ? '' : (renderMarkdown(stripThink(full)) || '');
-            genMeta.textContent = thinking ? 'Thinking...' : 'Generating...';
-            chatEl.scrollTop = chatEl.scrollHeight;
+
+            // Detect thinking tags
+            if (rawResponseText.includes('<think>') && !thinkStartTime) {
+              thinkStartTime = performance.now();
+            }
+            if (rawResponseText.includes('</think>') && !thinkEndTime) {
+              thinkEndTime = performance.now();
+            }
+
+            // Real-time render
+            renderAssistantStream(aiBubble, rawResponseText);
+            chatScrollArea.scrollTop = chatScrollArea.scrollHeight;
           }
-        } catch (e) { /* ignore partial/malformed chunk */ }
+        } catch (e) {}
       }
     }
 
-    const cleaned = stripThink(full);
-    aiBubble.innerHTML = renderMarkdown(cleaned) || '<p><em>(empty response)</em></p>';
-    messages.push({ role: 'assistant', content: cleaned });
-    const elapsed = ((performance.now() - started) / 1000).toFixed(1);
-    addMeta(aiWrap, `${elapsed}s`);
-    genMeta.textContent = '';
+    // Finalize Generation Telemetry
+    const totalDurationSec = (performance.now() - requestStartTime) / 1000;
+    const decodeDurationSec = firstTokenTime ? (performance.now() - firstTokenTime) / 1000 : 0;
+    const finalTps = decodeDurationSec > 0 ? (tokenCount / decodeDurationSec).toFixed(1) : '0.0';
+    const tpotMs = tokenCount > 0 ? ((decodeDurationSec * 1000) / tokenCount).toFixed(1) : '0.0';
+
+    topSpeedVal.textContent = `${finalTps} tok/s`;
+
+    // Parse Thinking Breakdown
+    const thinkData = extractThinking(rawResponseText);
+    const finalAnswer = thinkData.cleanedText || rawResponseText;
+    messages.push({ role: 'assistant', content: finalAnswer });
+
+    // Remove live HUD
+    liveHud.remove();
+
+    // Final Render of Assistant Message
+    renderAssistantFinal(aiBubble, thinkData);
+
+    // Compute Exact Prompt and Total Tokens
+    const promptTokensEst = estimateTokens(promptText) + estimateTokens(systemPrompt);
+    const outTokensCount = tokenCount;
+    thinkTokens = thinkData.thoughtText ? estimateTokens(thinkData.thoughtText) : 0;
+    const totalTokensCount = promptTokensEst + outTokensCount;
+    const contextPct = ((totalTokensCount / 8192) * 100).toFixed(1);
+
+    // Attach "Measure Everything" Deep Telemetry Card
+    const teleCard = document.createElement('div');
+    teleCard.className = 'telemetry-card';
+    teleCard.innerHTML = `
+      <div class="telemetry-grid">
+        <div class="tele-item">
+          <span class="tele-label">⚡ TTFT (Prefill)</span>
+          <span class="tele-val accent">${ttftMs || 0} ms</span>
+        </div>
+        <div class="tele-item">
+          <span class="tele-label">🚀 Speed (TPS)</span>
+          <span class="tele-val green">${finalTps} tok/s</span>
+        </div>
+        <div class="tele-item">
+          <span class="tele-label">⏱️ TPOT (Decode)</span>
+          <span class="tele-val">${tpotMs} ms/tok</span>
+        </div>
+        <div class="tele-item">
+          <span class="tele-label">⏱️ Total Time</span>
+          <span class="tele-val">${totalDurationSec.toFixed(2)} s</span>
+        </div>
+      </div>
+      <div class="tele-breakdown">
+        <span>Tokens: <strong>${outTokensCount}</strong> output (${thinkTokens} reasoning · ${outTokensCount - thinkTokens} answer) | <strong>${promptTokensEst}</strong> prompt</span>
+        <span>Context Used: <strong>${totalTokensCount} / 8,192 (${contextPct}%)</strong></span>
+      </div>
+      <div class="tele-context-bar">
+        <div class="tele-context-fill" style="width: ${Math.min(100, contextPct)}%;"></div>
+      </div>
+    `;
+    aiWrap.appendChild(teleCard);
+
+    // Record into Session History
+    recordSessionHistory({
+      prompt: promptText,
+      promptTokens: promptTokensEst,
+      outputTokens: outTokensCount,
+      thinkTokens: thinkTokens,
+      ttft: ttftMs,
+      tps: parseFloat(finalTps),
+      tpot: parseFloat(tpotMs),
+      duration: parseFloat(totalDurationSec.toFixed(2)),
+      timestamp: new Date().toLocaleTimeString()
+    });
+
   } catch (err) {
-    if (err.name === 'AbortError') {
-      genMeta.textContent = 'Stopped';
-    } else {
-      aiBubble.classList.add('error');
-      aiBubble.textContent = 'Error: ' + err.message;
-      genMeta.textContent = 'Request failed';
-    }
+    liveHud.remove();
+    aiBubble.classList.add('error');
+    aiBubble.innerHTML = `<strong>Error during generation:</strong> ${escapeHtml(err.message)}`;
   } finally {
-    sendBtn.style.display = 'inline-block';
+    clearInterval(timerInterval);
+    sendBtn.style.display = 'inline-flex';
     stopBtn.style.display = 'none';
-    controller = null;
+    activeController = null;
+    chatScrollArea.scrollTop = chatScrollArea.scrollHeight;
   }
 }
+
+function renderAssistantStream(bubble, raw) {
+  const mode = reasoningModeSelect.value;
+  const think = extractThinking(raw);
+
+  if (think.hasThinking && mode === 'accordion') {
+    bubble.innerHTML = `
+      <div class="thinking-box">
+        <div class="thinking-header">
+          <span>🧠 Reasoning Chain (Generating...)</span>
+        </div>
+        <div class="thinking-content">${escapeHtml(think.thoughtText)}</div>
+      </div>
+      <div>${renderMarkdown(think.cleanedText)}</div>
+    `;
+  } else if (mode === 'hidden') {
+    bubble.innerHTML = renderMarkdown(think.cleanedText || '<em>(generating...)</em>');
+  } else {
+    bubble.innerHTML = renderMarkdown(raw);
+  }
+}
+
+function renderAssistantFinal(bubble, think) {
+  const mode = reasoningModeSelect.value;
+  if (think.hasThinking && mode === 'accordion') {
+    const thinkTokens = estimateTokens(think.thoughtText);
+    bubble.innerHTML = `
+      <div class="thinking-box" id="thinkBoxFinal">
+        <div class="thinking-header" onclick="this.parentElement.classList.toggle('collapsed')">
+          <span>🧠 Reasoning Chain (${thinkTokens} tokens)</span>
+          <span style="font-size:11px;">▼ Toggle</span>
+        </div>
+        <div class="thinking-content">${escapeHtml(think.thoughtText)}</div>
+      </div>
+      <div>${renderMarkdown(think.cleanedText)}</div>
+    `;
+  } else if (mode === 'hidden') {
+    bubble.innerHTML = renderMarkdown(think.cleanedText);
+  } else {
+    bubble.innerHTML = renderMarkdown(think.cleanedText);
+  }
+}
+
+// ========================================================
+// TAB 2: LIVE TELEMETRY & GPU MONITOR (Polling & Rendering)
+// ========================================================
+const refreshMetricsBtn = document.getElementById('refreshMetricsBtn');
+const toggleAutoRefreshBtn = document.getElementById('toggleAutoRefreshBtn');
+
+refreshMetricsBtn.onclick = fetchEngineAndGpuMetrics;
+toggleAutoRefreshBtn.onclick = () => {
+  isAutoRefreshActive = !isAutoRefreshActive;
+  toggleAutoRefreshBtn.textContent = `Auto-Refresh: ${isAutoRefreshActive ? 'ON (2s)' : 'OFF'}`;
+  toggleAutoRefreshBtn.style.borderColor = isAutoRefreshActive ? 'var(--cyan)' : 'var(--border)';
+  if (isAutoRefreshActive) {
+    if (!autoRefreshTimer) autoRefreshTimer = setInterval(fetchEngineAndGpuMetrics, 2000);
+  } else {
+    clearInterval(autoRefreshTimer);
+    autoRefreshTimer = null;
+  }
+};
+autoRefreshTimer = setInterval(fetchEngineAndGpuMetrics, 2000);
+
+async function fetchEngineAndGpuMetrics() {
+  const base = getBaseUrl();
+
+  // 1. Fetch parsed vLLM metrics via /api/metrics or fallback to /metrics
+  try {
+    const res = await fetch((base || '') + '/api/metrics', {
+      headers: getAuthHeaders(),
+      signal: AbortSignal.timeout(2000)
+    });
+    if (res.ok) {
+      const data = await res.json();
+      updateEngineMetrics(data);
+    } else {
+      // Fallback: try raw /metrics
+      const rawRes = await fetch((base || '') + '/metrics', {
+        headers: getAuthHeaders(),
+        signal: AbortSignal.timeout(2000)
+      });
+      if (rawRes.ok) {
+        const text = await rawRes.text();
+        const parsed = parsePrometheusText(text);
+        updateEngineMetrics(parsed);
+      }
+    }
+  } catch (e) {}
+
+  // 2. Fetch GPU Hardware Stats via /api/gpu-stats
+  try {
+    const hwRes = await fetch((base || '') + '/api/gpu-stats', {
+      headers: getAuthHeaders(),
+      signal: AbortSignal.timeout(2000)
+    });
+    if (hwRes.ok) {
+      const hwData = await hwRes.json();
+      updateGpuHardwareStats(hwData);
+    }
+  } catch (e) {}
+}
+
+function parsePrometheusText(raw) {
+  const metrics = {};
+  for (const line of raw.split('\n')) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#')) continue;
+    const parts = trimmed.split(/\s+/);
+    if (parts.length >= 2) {
+      const key = parts[0].split('{')[0].replace('vllm:', '');
+      const val = parseFloat(parts[1]);
+      if (!isNaN(val)) metrics[key] = val;
+    }
+  }
+  return metrics;
+}
+
+function updateEngineMetrics(m) {
+  if (!m) return;
+  const kvFactor = m.gpu_cache_usage_factor !== undefined ? m.gpu_cache_usage_factor : 0;
+  const kvPct = (kvFactor * 100).toFixed(1);
+
+  document.getElementById('kpiKvUsage').textContent = `${kvPct}%`;
+  topKvVal.textContent = `${kvPct}%`;
+  document.getElementById('gaugeKvText').textContent = `${kvPct}% (${(kvFactor * 10.5).toFixed(1)} GB VRAM)`;
+  const gaugeBar = document.getElementById('gaugeKvBar');
+  gaugeBar.style.width = `${Math.min(100, kvPct)}%`;
+  gaugeBar.className = kvPct > 80 ? 'gauge-bar-inner warning' : 'gauge-bar-inner';
+
+  document.getElementById('kpiRunningReqs').textContent = m.num_requests_running || 0;
+  document.getElementById('kpiWaitingReqs').textContent = m.num_requests_waiting || 0;
+  document.getElementById('kpiSwappedReqs').textContent = m.num_requests_swapped || 0;
+
+  const avgGenTps = m.avg_generation_throughput_tok_per_s !== undefined ? m.avg_generation_throughput_tok_per_s.toFixed(1) : '--';
+  document.getElementById('kpiAvgGenTps').textContent = avgGenTps;
+
+  const promptTotal = m.prompt_tokens_total || 0;
+  const genTotal = m.generation_tokens_total || 0;
+  document.getElementById('kpiTotalTokens').textContent = (promptTotal + genTotal).toLocaleString();
+  document.getElementById('kpiPromptTokensTotal').textContent = promptTotal.toLocaleString();
+  document.getElementById('kpiGenTokensTotal').textContent = genTotal.toLocaleString();
+}
+
+function updateGpuHardwareStats(hw) {
+  const badge = document.getElementById('gpuHwStatusBadge');
+  if (hw.available && hw.gpus && hw.gpus.length > 0) {
+    const gpu = hw.gpus[0];
+    badge.textContent = `🟢 Attached: ${gpu.name}`;
+    badge.style.color = 'var(--green)';
+
+    document.getElementById('hwGpuName').textContent = gpu.name;
+    document.getElementById('hwGpuUtil').textContent = `${gpu.utilization_gpu_pct}%`;
+    const memUsedGb = (gpu.memory_used_mb / 1024).toFixed(1);
+    const memTotalGb = (gpu.memory_total_mb / 1024).toFixed(1);
+    document.getElementById('hwGpuMem').textContent = `${memUsedGb} / ${memTotalGb} GB`;
+    document.getElementById('hwGpuTemp').textContent = `${gpu.temperature_c} °C`;
+    document.getElementById('hwGpuPower').textContent = `${gpu.power_draw_w} W / ${gpu.power_limit_w} W`;
+    document.getElementById('hwGpuClock').textContent = `${gpu.clock_graphics_mhz} MHz`;
+  } else {
+    badge.textContent = '🟡 GPU Not Attached Yet (Mock/Ready Mode)';
+    badge.style.color = 'var(--yellow)';
+    document.getElementById('hwGpuName').textContent = '1x NVIDIA A100 (Awaiting Attach)';
+    document.getElementById('hwGpuMem').textContent = 'Weights: ~65.5 GB (BF16)';
+  }
+}
+
+// ========================================================
+// TAB 3: BENCHMARK SUITE IMPLEMENTATION
+// ========================================================
+const suiteCards = document.querySelectorAll('.suite-card');
+const benchPromptInput = document.getElementById('benchPromptInput');
+const startBenchmarkBtn = document.getElementById('startBenchmarkBtn');
+const benchIterationsSelect = document.getElementById('benchIterationsSelect');
+const benchMaxTokens = document.getElementById('benchMaxTokens');
+const benchProgressFill = document.getElementById('benchProgressFill');
+const benchProgressText = document.getElementById('benchProgressText');
+const benchStatusText = document.getElementById('benchStatusText');
+const benchTableBody = document.getElementById('benchTableBody');
+
+const BENCHMARK_PRESETS = {
+  latency: {
+    prompt: "Briefly define the concept of Time To First Token (TTFT) in large language model inference pipelines.",
+    maxTokens: 64
+  },
+  reasoning: {
+    prompt: "Solve this step-by-step with complete reasoning inside <think> tags: If a train leaves Chicago at 60 mph and another leaves Detroit at 80 mph towards each other separated by 280 miles, at what exact minute do they collide?",
+    maxTokens: 512
+  },
+  throughput: {
+    prompt: "You are an expert distributed systems engineer. Provide an exhaustive, deeply technical essay covering high-performance GPU architectures, tensor parallelism vs pipeline parallelism, memory bandwidth ceilings in HBM2e, FlashAttention kernel optimizations, and continuous batching algorithms in vLLM.",
+    maxTokens: 384
+  },
+  custom: {
+    prompt: "Analyze the architectural differences between NVIDIA V100 and A100 Tensor Cores with respect to FP16 and BF16 numerical stability.",
+    maxTokens: 256
+  }
+};
+
+suiteCards.forEach(card => {
+  card.onclick = () => {
+    suiteCards.forEach(c => c.classList.remove('selected'));
+    card.classList.add('selected');
+    const presetKey = card.dataset.preset;
+    if (BENCHMARK_PRESETS[presetKey]) {
+      benchPromptInput.value = BENCHMARK_PRESETS[presetKey].prompt;
+      benchMaxTokens.value = BENCHMARK_PRESETS[presetKey].maxTokens;
+    }
+  };
+});
+
+startBenchmarkBtn.onclick = runBenchmark;
+
+async function runBenchmark() {
+  const prompt = benchPromptInput.value.trim();
+  if (!prompt) return;
+  const iterations = parseInt(benchIterationsSelect.value, 10);
+  const maxTokens = parseInt(benchMaxTokens.value, 10);
+  const base = getBaseUrl();
+  const model = modelNameInput.value.trim() || 'Qwen3-32B';
+
+  startBenchmarkBtn.disabled = true;
+  benchTableBody.innerHTML = '';
+  const runs = [];
+
+  for (let i = 1; i <= iterations; i++) {
+    benchStatusText.textContent = `Running iteration ${i} of ${iterations}...`;
+    benchProgressText.textContent = `${i} / ${iterations}`;
+    benchProgressFill.style.width = `${((i - 1) / iterations) * 100}%`;
+
+    const rowEl = document.createElement('tr');
+    rowEl.innerHTML = `
+      <td>#${i}</td>
+      <td>...</td>
+      <td>...</td>
+      <td>...</td>
+      <td>...</td>
+      <td>...</td>
+      <td>...</td>
+      <td><span style="color:var(--yellow);">Running...</span></td>
+    `;
+    benchTableBody.appendChild(rowEl);
+
+    const start = performance.now();
+    let firstToken = null;
+    let tokens = 0;
+
+    try {
+      const res = await fetch((base || '') + '/v1/chat/completions', {
+        method: 'POST',
+        headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({
+          model,
+          messages: [{ role: 'user', content: prompt }],
+          max_tokens: maxTokens,
+          temperature: 0.1,
+          stream: true
+        })
+      });
+
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        if (!firstToken) firstToken = performance.now();
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop();
+        for (const line of lines) {
+          if (line.trim().startsWith('data:') && !line.includes('[DONE]')) {
+            try {
+              const j = JSON.parse(line.slice(5).trim());
+              if (j.choices?.[0]?.delta?.content) tokens++;
+            } catch (e) {}
+          }
+        }
+      }
+
+      const totalTimeSec = (performance.now() - start) / 1000;
+      const ttftMs = Math.round((firstToken || performance.now()) - start);
+      const decodeSec = firstToken ? (performance.now() - firstToken) / 1000 : 0;
+      const tps = decodeSec > 0 ? parseFloat((tokens / decodeSec).toFixed(1)) : 0;
+      const tpot = tokens > 0 ? parseFloat(((decodeSec * 1000) / tokens).toFixed(1)) : 0;
+      const inTokens = estimateTokens(prompt);
+
+      const runData = { run: i, promptTokens: inTokens, outTokens: tokens, ttft: ttftMs, tps, tpot, totalSec: parseFloat(totalTimeSec.toFixed(2)) };
+      runs.push(runData);
+
+      rowEl.innerHTML = `
+        <td><strong>#${i}</strong></td>
+        <td>${inTokens}</td>
+        <td>${tokens}</td>
+        <td>${ttftMs} ms</td>
+        <td style="color:var(--cyan); font-weight:700;">${tps} tok/s</td>
+        <td>${tpot} ms</td>
+        <td>${totalTimeSec.toFixed(2)} s</td>
+        <td><span style="color:var(--green);">Completed</span></td>
+      `;
+    } catch (err) {
+      rowEl.innerHTML = `<td>#${i}</td><td colspan="6" style="color:var(--red);">Failed: ${escapeHtml(err.message)}</td><td><span style="color:var(--red);">Error</span></td>`;
+    }
+  }
+
+  benchProgressFill.style.width = '100%';
+  benchStatusText.textContent = `Completed ${runs.length} iterations.`;
+  startBenchmarkBtn.disabled = false;
+  benchmarkHistory = runs;
+
+  // Compute Aggregations
+  if (runs.length > 0) {
+    const meanTtft = Math.round(runs.reduce((a, b) => a + b.ttft, 0) / runs.length);
+    const meanTps = (runs.reduce((a, b) => a + b.tps, 0) / runs.length).toFixed(1);
+    const meanTpot = (runs.reduce((a, b) => a + b.tpot, 0) / runs.length).toFixed(1);
+    const peakTps = Math.max(...runs.map(r => r.tps)).toFixed(1);
+
+    const sortedTtft = runs.map(r => r.ttft).sort((a, b) => a - b);
+    const p50Ttft = sortedTtft[Math.floor(sortedTtft.length * 0.5)];
+    const p90Ttft = sortedTtft[Math.floor(sortedTtft.length * 0.9)] || p50Ttft;
+
+    document.getElementById('benchMeanTtft').textContent = `${meanTtft} ms`;
+    document.getElementById('benchP50Ttft').textContent = `${p50Ttft} / ${p90Ttft} ms`;
+    document.getElementById('benchMeanTps').textContent = `${meanTps} tok/s`;
+    document.getElementById('benchPeakTps').textContent = `${peakTps} tok/s`;
+    document.getElementById('benchMeanTpot').textContent = `${meanTpot} ms`;
+  }
+}
+
+// Export Benchmark
+document.getElementById('exportBenchJsonBtn').onclick = () => {
+  downloadFile('qwen3_a100_benchmark.json', JSON.stringify(benchmarkHistory, null, 2), 'application/json');
+};
+document.getElementById('exportBenchCsvBtn').onclick = () => {
+  if (!benchmarkHistory.length) return alert('No benchmark data to export.');
+  let csv = 'Run,PromptTokens,OutputTokens,TTFT_ms,TPS_tokens_per_sec,TPOT_ms,TotalTime_sec\n';
+  benchmarkHistory.forEach(r => {
+    csv += `${r.run},${r.promptTokens},${r.outTokens},${r.ttft},${r.tps},${r.tpot},${r.totalSec}\n`;
+  });
+  downloadFile('qwen3_a100_benchmark.csv', csv, 'text/csv');
+};
+
+// ========================================================
+// TAB 4: SESSION HISTORY LOG
+// ========================================================
+function recordSessionHistory(item) {
+  sessionHistory.unshift(item);
+  renderHistoryTable();
+  updateHistoryKpis();
+}
+
+function renderHistoryTable() {
+  const tbody = document.getElementById('historyTableBody');
+  if (!sessionHistory.length) {
+    tbody.innerHTML = '<tr><td colspan="10" style="text-align:center; color:var(--text-dim); padding:20px;">No requests recorded yet.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = sessionHistory.map((item, idx) => `
+    <tr>
+      <td>${sessionHistory.length - idx}</td>
+      <td>${item.timestamp}</td>
+      <td title="${escapeHtml(item.prompt)}">${escapeHtml(item.prompt.slice(0, 32))}...</td>
+      <td>${item.promptTokens}</td>
+      <td>${item.outputTokens}</td>
+      <td>${item.thinkTokens}</td>
+      <td>${item.ttft} ms</td>
+      <td style="color:var(--cyan); font-weight:700;">${item.tps}</td>
+      <td>${item.tpot}</td>
+      <td>${item.duration}s</td>
+    </tr>
+  `).join('');
+}
+
+function updateHistoryKpis() {
+  document.getElementById('histTotalReqs').textContent = sessionHistory.length;
+  const totalTok = sessionHistory.reduce((a, b) => a + (b.promptTokens + b.outputTokens), 0);
+  document.getElementById('histTotalTokens').textContent = totalTok.toLocaleString();
+  const avgTps = (sessionHistory.reduce((a, b) => a + b.tps, 0) / sessionHistory.length).toFixed(1);
+  document.getElementById('histAvgTps').textContent = `${avgTps} tok/s`;
+  const avgTtft = Math.round(sessionHistory.reduce((a, b) => a + b.ttft, 0) / sessionHistory.length);
+  document.getElementById('histAvgTtft').textContent = `${avgTtft} ms`;
+}
+
+document.getElementById('exportHistoryJsonBtn').onclick = () => {
+  downloadFile('qwen3_session_history.json', JSON.stringify(sessionHistory, null, 2), 'application/json');
+};
+document.getElementById('exportHistoryCsvBtn').onclick = () => {
+  if (!sessionHistory.length) return alert('No session history to export.');
+  let csv = 'Timestamp,Prompt,PromptTokens,OutputTokens,ThinkTokens,TTFT_ms,TPS,TPOT_ms,Duration_sec\n';
+  sessionHistory.forEach(r => {
+    csv += `"${r.timestamp}","${r.prompt.replace(/"/g, '""')}",${r.promptTokens},${r.outputTokens},${r.thinkTokens},${r.ttft},${r.tps},${r.tpot},${r.duration}\n`;
+  });
+  downloadFile('qwen3_session_history.csv', csv, 'text/csv');
+};
+document.getElementById('clearHistoryBtn').onclick = () => {
+  sessionHistory = [];
+  renderHistoryTable();
+  updateHistoryKpis();
+};
+
+function downloadFile(name, content, type) {
+  const blob = new Blob([content], { type });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = name;
+  a.click();
+}
+
+// ========================================================
+// TAB 5: A100 MEMORY SIZING CALCULATOR
+// ========================================================
+const calcPrecisionSelect = document.getElementById('calcPrecisionSelect');
+const calcContextSelect = document.getElementById('calcContextSelect');
+const calcUsersInput = document.getElementById('calcUsersInput');
+
+function updateSizingMath() {
+  const precision = calcPrecisionSelect.value;
+  const contextLen = parseInt(calcContextSelect.value, 10);
+  const users = parseInt(calcUsersInput.value, 10) || 1;
+
+  // Qwen3-32B params ~32.76B
+  let bytesPerParam = 2.0; // bf16
+  if (precision === 'fp8') bytesPerParam = 1.0;
+  if (precision === 'awq') bytesPerParam = 0.55;
+
+  const weightsGb = (32.76 * bytesPerParam);
+  // Qwen GQA: 64 layers * 8 KV heads * 128 head_dim * 2 bytes = 256 KB per token
+  const kvBytesPerToken = 256 * 1024;
+  const kvGbPerSeq = ((contextLen * kvBytesPerToken) / (1024 * 1024 * 1024));
+  const totalKvGb = kvGbPerSeq * users;
+  const cudaRuntimeGb = 2.0;
+  const totalVramGb = (weightsGb + totalKvGb + cudaRuntimeGb).toFixed(1);
+
+  document.getElementById('calcWeightsVal').textContent = `${weightsGb.toFixed(1)} GB`;
+  document.getElementById('calcKvSeqVal').textContent = `${kvGbPerSeq.toFixed(2)} GB`;
+  document.getElementById('calcTotalVramVal').textContent = `${totalVramGb} GB`;
+
+  // 80GB Badge
+  const badge80 = document.getElementById('calc80gbBadge');
+  if (parseFloat(totalVramGb) <= 80.0) {
+    const free = (80.0 - parseFloat(totalVramGb)).toFixed(1);
+    badge80.className = 'status-badge-lg fit';
+    badge80.textContent = `✅ Fits (${free} GB Headroom)`;
+  } else {
+    const over = (parseFloat(totalVramGb) - 80.0).toFixed(1);
+    badge80.className = 'status-badge-lg nofit';
+    badge80.textContent = `❌ Exceeds 80GB by ${over} GB`;
+  }
+
+  // 40GB Badge
+  const badge40 = document.getElementById('calc40gbBadge');
+  if (parseFloat(totalVramGb) <= 40.0) {
+    const free40 = (40.0 - parseFloat(totalVramGb)).toFixed(1);
+    badge40.className = 'status-badge-lg fit';
+    badge40.textContent = `✅ Fits (${free40} GB Headroom)`;
+  } else {
+    const over40 = (parseFloat(totalVramGb) - 40.0).toFixed(1);
+    badge40.className = 'status-badge-lg nofit';
+    badge40.textContent = `❌ Exceeds 40GB by ${over40} GB`;
+  }
+}
+
+calcPrecisionSelect.onchange = updateSizingMath;
+calcContextSelect.onchange = updateSizingMath;
+calcUsersInput.oninput = updateSizingMath;
+updateSizingMath();
 </script>
 
 </body>

@@ -1,12 +1,14 @@
-# 🚀 Qwen3-32B Multi-GPU Deployment & Serving Platform
+# 🚀 Qwen3-32B Single-A100 Deployment & Observability Platform
 
 ![Model](https://img.shields.io/badge/Model-Qwen3--32B-indigo)
 ![vLLM](https://img.shields.io/badge/vLLM-v0.8.5-blue)
-![Hardware](https://img.shields.io/badge/Hardware-4x_NVIDIA_Tesla_V100_32GB-green)
-![Docker Hub](https://img.shields.io/badge/Docker_Hub-nish0753-cyan)
-![Kubernetes](https://img.shields.io/badge/Kubernetes-k3s_Enabled-326ce5)
+![Hardware](https://img.shields.io/badge/Hardware-1x_NVIDIA_A100_(80GB%2F40GB)-green)
+![Precision](https://img.shields.io/badge/Precision-bfloat16_Native-orange)
+![Attention](https://img.shields.io/badge/Attention-FlashAttention--2-cyan)
+![Parallelism](https://img.shields.io/badge/Tensor_Parallelism-TP%3D1_(Zero_NCCL)-magenta)
+![Observability](https://img.shields.io/badge/UI-Measure_Everything_Studio-success)
 
-A complete, enterprise-grade deployment stack for hosting Alibaba's **Qwen3-32B** model locally across **4x NVIDIA Tesla V100 GPUs (128GB total VRAM)** using **vLLM**, **Tensor Parallelism**, **Docker**, **Kubernetes (k3s)**, **Security Proxy**, and **Cloudflare Tunnels**.
+An enterprise-grade, high-performance deployment stack for hosting Alibaba's **Qwen3-32B** model on a **single NVIDIA A100 GPU** (80GB or 40GB) using **vLLM**, native **bfloat16**, **FlashAttention-2**, **Docker Compose**, **Kubernetes (k3s)**, and an end-to-end **"Measure Everything" Observability Studio**.
 
 ---
 
@@ -15,173 +17,233 @@ A complete, enterprise-grade deployment stack for hosting Alibaba's **Qwen3-32B*
 ```mermaid
 flowchart TD
     subgraph Client_Access["1. Client & Network Access Layer"]
-        User["User Browser / Mobile / Laptop"]
+        User["User Browser / Benchmarking Client"]
         CF_Tunnel["Cloudflare HTTPS Tunnel<br/>(trycloudflare.com)"]
-        SSH_Port["VS Code SSH Port Forwarding<br/>(localhost:3000 / :30080)"]
+        Direct_Port["Direct HTTP / SSH Forwarding<br/>(Port 3000 / 8080 / 30080)"]
     end
 
-    subgraph Security_Proxy["2. Security & Web Proxy Layer"]
-        Proxy["Python Proxy Server (serve_ui.py)<br/>Port 3000"]
-        Auth["Auth Check (X-Auth-Key)<br/>File: .ui_key"]
-        StaticUI["Static UI Server<br/>(chat_ui.html / index.html)"]
+    subgraph Security_Observability["2. Observability & Security Proxy Layer"]
+        Proxy["Python Observability Proxy (serve_ui.py)<br/>Port 3000"]
+        Auth["Auth Check (X-Auth-Key)"]
+        UI["Measure Everything Studio UI<br/>(chat_ui.html / index.html)"]
+        APIs["Telemetry Endpoints:<br/>/api/gpu-stats · /api/metrics · /metrics"]
     end
 
-    subgraph Orchestration["3. Kubernetes (k3s) & Container Layer"]
+    subgraph Container_Layer["3. Orchestration & Container Layer"]
         direction TB
-        subgraph K8s_NS["Namespace: qwen-inference"]
-            FE_Pod["Pod: chat-frontend<br/>(Nginx Container)"]
-            FE_Svc["NodePort Service<br/>(Port 30080)"]
-            vLLM_Svc["ClusterIP Service<br/>(vllm-service:8000)"]
-            
-            subgraph vLLM_Pod["Pod: vllm-qwen3-32b"]
-                vLLM_Engine["vLLM OpenAI Server<br/>(Docker Hub: nish0753/qwen3-32b-vllm:v1)"]
-                SHM["Shared Memory Mount<br/>(/dev/shm - 16Gi)"]
-            end
-        end
-        PV_Storage["HostPath Persistent Volume<br/>(/root/Qwen3-32B - 100Gi)"]
+        Docker_Compose["Docker Compose / K8s Deployment"]
+        Frontend_Container["chat-frontend (Nginx Proxy)"]
+        vLLM_Container["vllm-qwen3-32b (vLLM OpenAI Server)"]
+        SHM["Shared Memory Mount (/dev/shm - 16Gi)"]
+        Model_Mount["Model Volume Mount (/root/Qwen3-32B -> /model)"]
     end
 
-    subgraph Hardware_Engine["4. Inference Engine & Hardware Layer"]
-        PyTorch["PyTorch + NCCL 2.20.5 Communication"]
-        TP["Tensor Parallelism (TP = 4) | FP16 Precision"]
-        
-        subgraph GPUs["4x NVIDIA Tesla V100-SXM2-32GB GPUs"]
-            GPU0["GPU 0 (29.4 GB VRAM)"]
-            GPU1["GPU 1 (29.5 GB VRAM)"]
-            GPU2["GPU 2 (29.4 GB VRAM)"]
-            GPU3["GPU 3 (29.5 GB VRAM)"]
-        end
+    subgraph Hardware_Engine["4. Inference Engine & Hardware Acceleration Layer"]
+        FlashAttn["FlashAttention-2 Kernel (Ampere Native)"]
+        Engine["vLLM Engine (TP=1 · Native BF16 · PagedAttention)"]
+        A100_GPU["1x NVIDIA A100 GPU (80GB SXM4/PCIe or 40GB AWQ)"]
     end
 
     %% Flow Connections
-    User -->|HTTPS Traffic| CF_Tunnel
-    User -->|Direct SSH Tunnel| SSH_Port
+    User -->|Web Access| CF_Tunnel
+    User -->|Direct Access| Direct_Port
     CF_Tunnel --> Proxy
-    SSH_Port --> Proxy
-    
-    Proxy -->|1. Request Static Page| StaticUI
-    Proxy -->|2. Validate Secret Key| Auth
-    Auth -->|3. Forward /v1/* Calls| vLLM_Svc
-    
-    FE_Svc --> FE_Pod
-    vLLM_Svc --> vLLM_Engine
-    PV_Storage -.->|Mount /model| vLLM_Engine
-    SHM -.->|Shared IPC| vLLM_Engine
+    Direct_Port --> Proxy
+    Direct_Port --> Frontend_Container
 
-    vLLM_Engine --> PyTorch
-    PyTorch --> TP
-    TP --> GPU0
-    TP --> GPU1
-    TP --> GPU2
-    TP --> GPU3
+    Proxy --> UI
+    Proxy --> Auth
+    Proxy --> APIs
+    Auth -->|Forward /v1/* Calls| vLLM_Container
+    Frontend_Container --> vLLM_Container
+
+    Model_Mount -.->|Mount Weights| vLLM_Container
+    SHM -.->|Shared IPC| vLLM_Container
+    vLLM_Container --> Engine
+    Engine --> FlashAttn
+    FlashAttn --> A100_GPU
 ```
 
 ---
 
-## ⚡ Quick Start Deployment Guide
+## ⚡ What Makes 1x A100 Superior to 4x V100?
 
-You can deploy this platform on any fresh GPU machine using **Docker Hub images** or **Kubernetes**.
-
-### Prerequisites
-* **Hardware**: 4x NVIDIA GPUs with $\ge 128\text{ GB}$ total VRAM (e.g. 4x V100 32GB or 4x A100/A10G).
-* **Software**: Linux OS, NVIDIA GPU Drivers (v550+), Docker & NVIDIA Container Toolkit (or K3s/Kubernetes).
+| Feature / Dimension | Old Setup: 4x Tesla V100 (32GB) | New Setup: 1x NVIDIA A100 (80GB/40GB) | Engineering Benefit |
+|---|---|---|---|
+| **Tensor Parallelism** | `TP = 4` (Distributed across 4 GPUs) | `TP = 1` (Single GPU Engine) | **Zero NCCL communication latency**; no PCIe/NVLink bus overhead or all-reduce sync delays. |
+| **Numerical Stability** | FP16 (`--dtype half`) | Native `bfloat16` (Ampere native) | **Eliminates NaN and numerical overflow** in Qwen's deep multi-head attention layers. |
+| **Attention Kernel** | XFormers / Naive | FlashAttention-2 | Up to **2.5x faster prompt prefill (TTFT)** and significantly reduced activation memory. |
+| **Inter-GPU Workarounds** | Required `--disable-custom-all-reduce` | Not needed | Completely eliminates multi-GPU driver crashes, NCCL topology bugs, and CPU thread contention. |
+| **Operational Simplicity** | 4 failure domains; complex multi-GPU topology | 1 clean device | 50% lower idle cost, simpler container boundaries, instant restarts. |
 
 ---
 
-### Step 1: Obtain the Qwen3-32B Model Weights
+## 📊 VRAM Sizing & Headroom Analysis for 1x A100
 
-On your GPU machine, download or mount the model weights to `/root/Qwen3-32B`:
+### 1. On an NVIDIA A100 80GB (Recommended: Native `bfloat16`):
+* **Model Parameters**: ~32.76 Billion parameters.
+* **Weights in BF16 (16-bit / 2 bytes)**: $32.76 \times 2 = 65.52\text{ GB}$.
+* **CUDA Runtime & Activations**: ~2.0 GB.
+* **Allocated vLLM Pool (`gpu-memory-utilization: 0.92`)**: $80 \times 0.92 = 73.6\text{ GB}$.
+* **Dedicated KV Cache Pool**: $73.6 - 65.5 = \sim 8.1\text{ to }10.5\text{ GB}$.
+* **Qwen GQA KV Cache Footprint**:
+  $$\text{KV Cache per token} = 2 \times 64\text{ layers} \times 8\text{ KV heads} \times 128\text{ head\_dim} \times 2\text{ bytes} = 262,144\text{ bytes} \approx 256\text{ KB/token}$$
+* **KV Capacity**: $\approx 35,000\text{ to }42,000\text{ active tokens}$.
+  * Supports up to **5 concurrent 8k context sequences** or **30+ concurrent conversational sessions** without swapping!
 
+### 2. On an NVIDIA A100 40GB (Quantized Mode):
+* In unquantized BF16, 65.5 GB of weights exceeds 40 GB. To run on A100 40GB, enable **AWQ 4-bit** or **FP8**:
+  * **AWQ 4-bit (`QUANTIZATION=awq`)**: Weights $\approx 18.0\text{ GB}$. Leaves **$\sim 18.5\text{ GB}$ pure KV cache headroom** (70,000+ tokens)!
+  * **FP8 8-bit (`QUANTIZATION=fp8`)**: Weights $\approx 33.0\text{ GB}$. Fits with tight context (`max-model-len: 4096`).
+
+---
+
+## 📈 The "Measure Everything" UI: What It Tracks
+
+The upgraded UI (`chat_ui.html` and `frontend/index.html`) is a complete inference observability cockpit containing **5 dedicated panels**:
+
+### 1. 💬 Chat & Per-Message Deep Telemetry HUD
+Every single generation includes real-time telemetry tiles:
+* ⚡ **TTFT (Time To First Token / Prefill Latency)**: Exact millisecond duration from HTTP dispatch to first token arrival.
+* 🚀 **Generation Throughput (TPS)**: Pure decode speed in `tokens/sec`.
+* ⏱️ **Inter-Token Latency (TPOT)**: Average time per generated token in `ms/token`.
+* ⏱️ **Total Elapsed Duration**: Complete request lifecycle in seconds.
+* 🧠 **Reasoning Token Accounting**: Tracks `<think>` reasoning tokens, thinking duration, and thinking TPS separately from the final answer.
+* 📏 **Context Window Footprint**: Live progress bar showing active tokens used against the 8,192 token window.
+
+### 2. 📊 Live Engine & A100 GPU Monitor
+* **PagedAttention KV Cache Gauge**: Circular meter showing real-time % of GPU memory allocated to KV Cache.
+* **Inference Queue Counters**: Live counts of Running, Waiting (Queued), and Swapped requests.
+* **Cumulative Volume**: Total prompt tokens and generation tokens processed since engine startup.
+* **A100 Hardware Telemetry (via `/api/gpu-stats`)**:
+  * Live GPU core utilization %
+  * VRAM allocated vs total (GB)
+  * Temperature (°C) with thermal warning zones
+  * Power draw (Watts) vs TDP limit
+
+### 3. 🧪 Automated Benchmark & Stress-Testing Suite
+* Run 1, 3, 5, or 10 repeatable iterations on standard workloads:
+  * **Latency Probe**: 40 prompt tokens $\to$ 64 output tokens.
+  * **Reasoning Test**: Multi-step math puzzle triggering deep `<think>` chain.
+  * **Heavy Context**: 1,500 prompt tokens into 256 output tokens.
+  * **Custom Suite**: Configurable prompt, iterations, and max output tokens.
+* **Statistical Breakdown**: Automatically calculates **Mean**, **P50 (Median)**, **P90**, **Peak TPS**, and **TPOT**.
+* **One-Click Export**: Export benchmark results to CSV or JSON!
+
+### 4. 📜 Session History & Analytics
+* Logs every query executed in the current session.
+* Displays global KPIs: Session Total Tokens, Average TTFT, Average TPS, Peak TPS.
+* Export session data to CSV or JSON.
+
+### 5. 📐 Interactive A100 Sizing Calculator
+* Experiment with parameters (Precision, Context Length, Concurrent Users) to verify exact VRAM requirements before running heavy workloads.
+
+---
+
+## 🛠️ Step-by-Step GPU Attachment & Deployment Guide
+
+Once you attach your NVIDIA A100 GPU, follow these steps to deploy:
+
+### Step 1: Verify the Attached GPU
+Run `nvidia-smi` to ensure the driver recognizes your single A100 GPU:
 ```bash
-# Install HuggingFace CLI and download model weights (~62 GB)
+nvidia-smi
+```
+Expected output: `NVIDIA A100-SXM4-80GB` or `NVIDIA A100-PCIE-40GB` with driver v535+.
+
+---
+
+### Step 2: Obtain Qwen3-32B Model Weights
+Ensure model weights are present at `/root/Qwen3-32B`:
+```bash
 pip install huggingface_hub
 huggingface-cli download Qwen/Qwen3-32B --local-dir /root/Qwen3-32B
 ```
 
 ---
 
-### Step 2: Launch the System
+### Step 3: Launch the Deployment
 
-Choose **Option A (Kubernetes)** or **Option B (Docker Compose)**:
+Choose **Option A (Docker Compose - Recommended)**, **Option B (Kubernetes)**, or **Option C (Direct Docker Run)**:
 
-#### 🚀 Option A: Kubernetes (Recommended)
+#### 🐳 Option A: Docker Compose (Recommended)
+```bash
+# Build and start vLLM and frontend containers in the background
+docker compose up -d --build
 
-Run the pre-configured Kubernetes manifests. Kubernetes will automatically pull the custom pre-built images from Docker Hub:
+# View container logs
+docker compose logs -f
+```
+* **UI**: `http://localhost:8080`
+* **vLLM API**: `http://localhost:8000/v1/models`
 
+> **Note for A100 40GB Users**:
+> If using an A100 40GB, open `docker-compose.yml` and uncomment:
+> ```yaml
+> - QUANTIZATION=awq
+> ```
+
+---
+
+#### 🚀 Option B: Kubernetes (k3s)
+Apply the updated 1x A100 manifests:
 ```bash
 # 1. Apply Kubernetes manifests
 kubectl apply -f k8s/qwen3-k8s.yaml
 
-# 2. Check deployment & pod status
+# 2. Monitor pod startup
 kubectl get pods -n qwen-inference -w
 ```
-
-Once running, access the Chat UI on **NodePort `30080`**:
-* **UI URL**: `http://<your-node-ip>:30080`
+* **Frontend UI (NodePort)**: `http://<node-ip>:30080`
 
 ---
 
-#### 🐳 Option B: Docker Compose
-
-If you prefer running via Docker Compose:
-
+#### ⚡ Option C: Direct Docker Run
+If running without compose:
 ```bash
-# Start vLLM inference and Chat UI containers in background
-docker compose up -d
-
-# Check running containers
-docker ps
-```
-
-* **Frontend UI**: `http://localhost:8080`
-* **vLLM API**: `http://localhost:8000/v1/models`
-
----
-
-### Step 3: Enable Security Proxy & Public HTTPS Access
-
-To protect your GPU endpoints with API key security and make the UI accessible anywhere over HTTPS:
-
-```bash
-# 1. Start the authenticating reverse proxy (Port 3000)
-nohup python3 serve_ui.py > /root/http_ui.log 2>&1 &
-
-# 2. Launch Cloudflare HTTPS Tunnel
-nohup cloudflared tunnel --url http://localhost:3000 > /root/cloudflared.log 2>&1 &
-
-# 3. Get your public HTTPS URL
-grep -E "trycloudflare.com" /root/cloudflared.log
+docker run -d \
+  --name vllm-qwen3-32b \
+  --gpus '"device=0"' \
+  --ipc=host \
+  --shm-size=16g \
+  -p 8000:8000 \
+  -v /root/Qwen3-32B:/model \
+  -e TENSOR_PARALLEL_SIZE=1 \
+  -e DTYPE=bfloat16 \
+  -e MAX_MODEL_LEN=8192 \
+  -e GPU_MEMORY_UTILIZATION=0.92 \
+  -e SERVED_MODEL_NAME=Qwen3-32B \
+  vllm/vllm-openai:v0.8.5 \
+  --model /model \
+  --served-model-name Qwen3-32B \
+  --tensor-parallel-size 1 \
+  --dtype bfloat16 \
+  --max-model-len 8192 \
+  --gpu-memory-utilization 0.92 \
+  --trust-remote-code
 ```
 
 ---
 
-## 🔐 Pre-built Docker Hub Images
-
-All core components are packaged and available publicly on Docker Hub:
-
-| Component | Docker Hub Image | Description |
-| --- | --- | --- |
-| **Inference Engine** | [`nish0753/qwen3-32b-vllm:v1`](https://hub.docker.com/r/nish0753/qwen3-32b-vllm) | vLLM engine pre-configured for 4x GPUs, fp16 precision, and XFormers attention. |
-| **Chat UI Frontend** | [`nish0753/qwen3-chat-frontend:v1`](https://hub.docker.com/r/nish0753/qwen3-chat-frontend) | Lightweight Nginx container serving the interactive Chat interface. |
+### Step 4: Launch the Observability Proxy (`serve_ui.py`)
+Run the Python proxy to serve the UI with live GPU telemetry and optional API key security:
+```bash
+# Start proxy on Port 3000
+python3 serve_ui.py
+```
+To enable API key protection, simply set `UI_AUTH_KEY`:
+```bash
+UI_AUTH_KEY="your-secret-key" python3 serve_ui.py
+```
 
 ---
 
-## 🛠️ Deep-Dive Technical Solutions Solved
-
-### 1. VRAM & Hardware Sizing Math
-* **Model Weights (FP16)**: $32\text{B params} \times 2\text{ bytes} = 64\text{ GB}$.
-* **KV Cache & Activations**: ~16 GB across workers.
-* **Total VRAM Needed**: ~84 GB minimum.
-* **Why 4x GPUs**: Single V100 (32GB) or Dual V100 (64GB) out-of-memory. 4x V100 (128GB) leaves ~52 GB headroom for concurrent sessions and long context (8,192 max len).
-
-### 2. NCCL Segfault Fix on V100 SXM2 Topology
-* **Issue**: `libnccl.so.2` segfaulted on initial launches.
-* **Root Cause**: NCCL 2.21.5 bug when detecting asymmetric SXM2 mesh topologies (hybrid NVLink/PCIe without NVSwitch).
-* **Fix**: Downgraded to `nvidia-nccl-cu12==2.20.5`.
-
-### 3. Qwen3 Reasoning Tokens Parsing
-* Qwen3 outputs reasoning chains inside `<think>...</think>` tags.
-* Implemented client-side JavaScript regex filtering (`stripThink`) to render a *"Thinking..."* UI status and save context tokens on multi-turn conversations.
+### Step 5: (Optional) Public HTTPS Access via Cloudflare Tunnel
+To access your studio securely from anywhere:
+```bash
+cloudflared tunnel --url http://localhost:3000
+```
+Open the generated `trycloudflare.com` URL in your browser.
 
 ---
 
@@ -189,20 +251,32 @@ All core components are packaged and available publicly on Docker Hub:
 
 ```text
 .
-├── README.md                                  # Main Documentation (This File)
-├── chat_ui.html                               # Single-file HTML/CSS/JS Chat Interface
-├── serve_ui.py                                # Python Security Proxy (Port 3000, X-Auth-Key)
-├── .ui_key                                    # Generated secret API access key
-├── docker-compose.yml                         # Multi-container Docker Compose file
-├── architecture.md                            # Detailed Architecture Breakdown
-├── architecture_diagram.png                   # Rendered System Architecture PNG
-├── sequence_diagram.png                       # Rendered Sequence Diagram PNG
-├── build_pdf.py                               # Script to generate PDF documentation
-├── deliverables/
-│   └── Qwen3-32B_Deployment_Guide.pdf        # Complete 500+ KB PDF Operational Manual
+├── README.md                          # Comprehensive Documentation (This File)
+├── chat_ui.html                       # Standalone "Measure Everything" Studio UI
+├── serve_ui.py                        # Python Observability & Security Proxy (Port 3000, /api/gpu-stats)
+├── docker-compose.yml                 # 1x A100 Docker Compose configuration
+├── frontend/
+│   ├── Dockerfile                     # Nginx Frontend Container
+│   ├── index.html                     # "Measure Everything" Studio UI
+│   ├── nginx.conf                     # Nginx proxy configuration
+│   └── default.conf.template          # Dynamic envsubst template for UPSTREAM_HOST
 ├── k8s/
-│   └── qwen3-k8s.yaml                         # Kubernetes Manifests (PV, PVC, Deployments, Services)
+│   └── qwen3-k8s.yaml                 # 1x A100 Kubernetes Manifests (PV, PVC, Deployments, Services)
 └── vllm-qwen3-32b-image/
-    └── Dockerfile                             # Custom vLLM Dockerfile
+    ├── Dockerfile                     # Optimized 1x A100 vLLM Dockerfile
+    └── entrypoint.sh                  # Configurable entrypoint with dynamic GPU & quantization flags
 ```
 
+---
+
+## 🔐 Environment Variables Reference
+
+| Variable | Default | Description |
+|---|---|---|
+| `TENSOR_PARALLEL_SIZE` | `1` | Tensor parallel degree (1 for single A100). |
+| `DTYPE` | `bfloat16` | Precision data type (`bfloat16` for Ampere native performance). |
+| `MAX_MODEL_LEN` | `8192` | Maximum context length (reduce to 4096 if VRAM is constrained). |
+| `GPU_MEMORY_UTILIZATION` | `0.92` | Fraction of GPU VRAM dedicated to vLLM (0.90 - 0.95). |
+| `QUANTIZATION` | `""` | Set to `awq` or `fp8` for running on A100 40GB. |
+| `UPSTREAM_URL` | `http://127.0.0.1:8000` | Target vLLM engine URL for `serve_ui.py`. |
+| `UI_AUTH_KEY` | `""` | Optional secret key for endpoint protection. |
