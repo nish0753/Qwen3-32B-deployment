@@ -36,19 +36,15 @@ echo "📦 Installing vLLM, HuggingFace Hub with fast transfer..."
 pip install --upgrade pip
 pip install "vllm>=0.8.5" huggingface_hub hf_transfer
 
-# 3. Model Weights Download (High-speed hf_transfer)
+# 3. Model Weights Download (High-speed hf_transfer & resume verification)
 MODEL_DIR="/workspace/Qwen3-32B"
-if [ -d "$MODEL_DIR" ] && [ -f "$MODEL_DIR/config.json" ]; then
-  echo "✅ Model weights already present in $MODEL_DIR."
-else
-  echo "⬇️ Downloading Qwen3-32B model weights to $MODEL_DIR (~65 GB)..."
-  export HF_HUB_ENABLE_HF_TRANSFER=1
-  python3 -c "
+echo "⬇️ Verifying and downloading complete Qwen3-32B model weights to $MODEL_DIR (~65 GB)..."
+export HF_HUB_ENABLE_HF_TRANSFER=1
+python3 -c "
 import os
 from huggingface_hub import snapshot_download
-snapshot_download('Qwen/Qwen3-32B', local_dir='$MODEL_DIR')
+snapshot_download('Qwen/Qwen3-32B', local_dir='$MODEL_DIR', resume_download=True)
 "
-fi
 
 # Ensure symlink from /root/Qwen3-32B
 if [ ! -d "/root/Qwen3-32B" ]; then
