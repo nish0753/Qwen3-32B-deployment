@@ -27,6 +27,7 @@ build_pdf.py
 *.sh
 !vllm-qwen3-32b-image/entrypoint.sh
 !runpod_setup.sh
+!fix_and_run.sh
 __pycache__/
 *.pyc
 cloudflared

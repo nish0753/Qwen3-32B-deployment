@@ -212,14 +212,18 @@ class ProxyHandler(http.server.SimpleHTTPRequestHandler):
             with urllib.request.urlopen(req, timeout=300) as upstream:
                 self.send_response(upstream.status)
                 self.send_header('Content-Type', upstream.headers.get('Content-Type', 'application/json'))
-                self.send_header('Cache-Control', 'no-cache')
+                self.send_header('Cache-Control', 'no-cache, no-transform')
+                self.send_header('X-Accel-Buffering', 'no')
                 self.end_headers()
                 while True:
-                    chunk = upstream.read(512)
-                    if not chunk:
+                    try:
+                        chunk = upstream.read(512)
+                        if not chunk:
+                            break
+                        self.wfile.write(chunk)
+                        self.wfile.flush()
+                    except (BrokenPipeError, ConnectionResetError):
                         break
-                    self.wfile.write(chunk)
-                    self.wfile.flush()
         except urllib.error.HTTPError as e:
             self.send_response(e.code)
             self.send_header('Content-Type', 'application/json')
@@ -229,7 +233,7 @@ class ProxyHandler(http.server.SimpleHTTPRequestHandler):
             self.send_response(502)
             self.send_header('Content-Type', 'application/json')
             self.end_headers()
-            err_msg = json.dumps({"error": f"Upstream proxy failed ({UPSTREAM}): {str(e)}"}).encode('utf-8')
+            err_msg = json.dumps({"error": f"Upstream vLLM engine unreachable on port 8000: {str(e)}"}).encode('utf-8')
             self.wfile.write(err_msg)
 
 
