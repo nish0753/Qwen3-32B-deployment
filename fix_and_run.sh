@@ -24,13 +24,16 @@ sleep 2
 echo "=================================================================="
 echo "🚀 STEP 3: Starting vLLM Engine on 1x A100 (Port 8000)"
 echo "=================================================================="
+export VLLM_USE_V1=0
+export VLLM_WORKER_MULTIPROC_METHOD=spawn
+
 nohup python3 -m vllm.entrypoints.openai.api_server \
   --model /workspace/Qwen3-32B \
   --served-model-name Qwen3-32B \
   --tensor-parallel-size 1 \
   --dtype bfloat16 \
-  --max-model-len 8192 \
-  --gpu-memory-utilization 0.90 \
+  --max-model-len 4096 \
+  --gpu-memory-utilization 0.88 \
   --enforce-eager \
   --trust-remote-code \
   --port 8000 > /workspace/vllm.log 2>&1 &
@@ -104,3 +107,4 @@ else
   echo "👉 Check tunnel URL: grep -a -o 'https://.*trycloudflare.com' /workspace/tunnel.log"
 fi
 echo "=================================================================="
+
