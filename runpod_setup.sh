@@ -99,7 +99,7 @@ sleep 4
 
 PUBLIC_URL=""
 for i in {1..10}; do
-  PUBLIC_URL=$(grep -o 'https://[-a-zA-Z0-9.]*trycloudflare.com' /workspace/tunnel.log | head -n 1 || true)
+  PUBLIC_URL=$(grep -a -o 'https://[-a-zA-Z0-9.]*trycloudflare.com' /workspace/tunnel.log | head -n 1 || true)
   if [ -n "$PUBLIC_URL" ]; then
     break
   fi
@@ -114,7 +114,7 @@ if [ -n "$PUBLIC_URL" ]; then
   echo "👉 YOUR PUBLIC STUDIO URL: $PUBLIC_URL"
   echo "   (Click or open this URL in your browser to access the Studio)"
 else
-  echo "👉 Check tunnel URL manually: grep -o 'https://.*trycloudflare.com' /workspace/tunnel.log"
+  echo "👉 Check tunnel URL manually: grep -a -o 'https://.*trycloudflare.com' /workspace/tunnel.log"
 fi
 echo ""
 echo "Local endpoints on this pod:"
